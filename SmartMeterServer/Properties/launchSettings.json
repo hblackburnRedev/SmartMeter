@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "SmartMeterServer": {
+      "commandName": "Project"
+    },
+    "Container (Dockerfile)": {
+      "commandName": "Docker"
+    }
+  }
+}
