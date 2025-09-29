@@ -1,0 +1,35 @@
+{
+  "name": "smartmeter.client",
+  "version": "1.0.0",
+  "description": "Smart Meter Client Application - Electron Desktop App",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "test:multiple": "node run-multiple.js 12",
+    "test:6": "node run-multiple.js 6",
+    "build": "webpack --mode production",
+    "build:dev": "webpack --mode development",
+    "watch": "webpack --mode development --watch"
+  },
+  "keywords": [
+    "smart-meter",
+    "electron",
+    "desktop-app",
+    "iot"
+  ],
+  "author": "Your Team Name",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@babel/core": "^7.28.4",
+    "@babel/preset-react": "^7.27.1",
+    "electron": "^38.2.0",
+    "webpack": "^5.101.3",
+    "webpack-cli": "^6.0.1"
+  },
+  "dependencies": {
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  }
+}
