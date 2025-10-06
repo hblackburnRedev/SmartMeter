@@ -19,6 +19,7 @@ namespace SmartMeter.Server;
                 Console.WriteLine(ex.Message);
                 throw;
             }  
+            //Conor was Here
         }
 
         public static async Task StartServer(string ipAddress, int port)
