@@ -126,18 +126,18 @@ public class Program
     }
     private static async Task ProcessWebSocketRequest(HttpListenerContext context)
     {
-        string? key = context.Request.QueryString["sessionToken"];
+        string? key = context.Request.QueryString["sessionKey"];
 
         if (string.IsNullOrEmpty(key) || !_activeSessions.ContainsKey(key))
         {
             context.Response.StatusCode = 403;
-            await context.Response.OutputStream.WriteAsync(Encoding.UTF8.GetBytes("Invalid or missing session token"));
+            await context.Response.OutputStream.WriteAsync(Encoding.UTF8.GetBytes("Invalid or missing session key"));
             context.Response.Close();
             return;
         }
 
         var clientId = _activeSessions[key];
-        Console.WriteLine($"Client {clientId} connected with valid session token.");
+        Console.WriteLine($"Client {clientId} connected with valid session key.");
 
         HttpListenerWebSocketContext webSocketContext = await context.AcceptWebSocketAsync(null);
         WebSocket socket = webSocketContext.WebSocket;
