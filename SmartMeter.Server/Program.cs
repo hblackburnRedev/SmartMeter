@@ -55,12 +55,6 @@ public class Program
                 HttpListenerContext context = await listener.GetContextAsync();
 
                 // Handle authentication 
-                if (context.Request.HttpMethod == "POST" && context.Request.Url!.AbsolutePath == "/auth")
-                {
-                    await HandleAuthRequest(context);
-                    continue;
-                }
-
                 if (context.Request.IsWebSocketRequest)
                 {
                     await ProcessWebSocketRequest(context);
