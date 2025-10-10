@@ -103,6 +103,8 @@ public class Program
             if (_validClients.TryGetValue(payload.ClientID, out var expectedKey) && expectedKey == payload.APIKey)
             {
                 var sessionKey = Guid.NewGuid().ToString(); // For demo
+                _activeSessions[sessionKey] = payload.ClientID; // ✅ store active session
+
                 await WriteJsonResponse(context, new
                 {
                     success = true,
