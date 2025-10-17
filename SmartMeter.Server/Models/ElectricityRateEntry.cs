@@ -7,9 +7,6 @@ public sealed record ElectricityRateEntry
     [Name("region")]
     public required string Region { get; init; }
 
-    [Name("period")]
-    public required string Period { get; init; }
-
     [Name("standing_charge_value")]
     public required decimal StandingChargeRate { get; init; }
 

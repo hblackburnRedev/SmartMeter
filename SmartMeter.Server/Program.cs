@@ -12,10 +12,11 @@ public class Program
     public static async Task Main(string[] args)
     {
         // Load configuration from appsettings.json
-        var config = new ConfigurationBuilder()
+        var builder = new ConfigurationBuilder()
             .SetBasePath(Directory.GetCurrentDirectory())
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-            .Build();
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+
+        var config = builder.Build();
 
         var services = CreateServices(config);
         
@@ -43,7 +44,8 @@ public class Program
         });
 
         services
-            .Configure<ServerConfiguration>(configuration.GetRequiredSection("ServerConfiguration"));
+            .Configure<ServerConfiguration>(configuration.GetRequiredSection("ServerConfiguration"))
+            .Configure<ReadingConfiguration>(configuration.GetRequiredSection("ReadingConfiguration"));
         
         services
             .AddSingleton<IWebSocketServer, WebSocketServer>()

@@ -1,0 +1,8 @@
+﻿services:
+  smartmeter.server:
+    image: smartmeter.server
+    build:
+      context: .
+      dockerfile: SmartMeter.Server/Dockerfile
+      
+

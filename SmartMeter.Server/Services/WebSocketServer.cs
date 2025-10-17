@@ -120,8 +120,8 @@ public class WebSocketServer(
                         await socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "Invalid authentication format", CancellationToken.None);
                         return;
                     }
-                    
-                    var pricing = await pricingService.CalculatePriceAsync(payload.Region, payload.Usage);
+
+                    var pricing = await pricingService.CalculatePriceAsync(payload.Region, payload.Usage, clientId);
                     
                     // Echo the message
                     await socket.SendAsync(Encoding.UTF8.GetBytes(pricing.ToString(CultureInfo.InvariantCulture)), WebSocketMessageType.Text, true, CancellationToken.None);

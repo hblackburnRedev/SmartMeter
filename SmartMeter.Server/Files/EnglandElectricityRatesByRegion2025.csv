@@ -1,31 +1,16 @@
-region,period,standing_charge_value,standing_charge_unit,unit_rate_value,unit_rate_unit
-North West,2025_Q3,48.85,p/day,26.65,p/kWh
-North West,2025_Q4,51.16,p/day,27.11,p/kWh
-Northern,2025_Q3,57.56,p/day,24.96,p/kWh
-Northern,2025_Q4,59.86,p/day,25.43,p/kWh
-Yorkshire,2025_Q3,56.35,p/day,24.84,p/kWh
-Yorkshire,2025_Q4,58.65,p/day,25.33,p/kWh
-Northern Scotland,2025_Q3,58.69,p/day,25.79,p/kWh
-Northern Scotland,2025_Q4,61.00,p/day,27.06,p/kWh
-Southern,2025_Q3,42.30,p/day,25.94,p/kWh
-Southern,2025_Q4,44.62,p/day,26.48,p/kWh
-Southern Scotland,2025_Q3,54.25,p/day,24.53,p/kWh
-Southern Scotland,2025_Q4,56.55,p/day,25.84,p/kWh
-North Wales and Mersey,2025_Q3,67.65,p/day,27.20,p/kWh
-North Wales and Mersey,2025_Q4,69.95,p/day,27.72,p/kWh
-London,2025_Q3,43.76,p/day,25.13,p/kWh
-London,2025_Q4,46.06,p/day,25.63,p/kWh
-South East,2025_Q3,45.28,p/day,26.39,p/kWh
-South East,2025_Q4,47.60,p/day,26.92,p/kWh
-Eastern,2025_Q3,45.94,p/day,26.01,p/kWh
-Eastern,2025_Q4,48.25,p/day,26.53,p/kWh
-East Midlands,2025_Q3,46.78,p/day,25.06,p/kWh
-East Midlands,2025_Q4,49.09,p/day,25.55,p/kWh
-Midlands,2025_Q3,50.69,p/day,25.14,p/kWh
-Midlands,2025_Q4,53.00,p/day,25.64,p/kWh
-Southern Western,2025_Q3,51.72,p/day,26.31,p/kWh
-Southern Western,2025_Q4,54.03,p/day,26.82,p/kWh
-South Wales,2025_Q3,49.38,p/day,26.32,p/kWh
-South Wales,2025_Q4,51.69,p/day,26.83,p/kWh
-Great Britain average,2025_Q3,51.37,p/day,25.73,p/kWh
-Great Britain average,2025_Q4,53.68,p/day,26.35,p/kWh
+region,standing_charge_value,standing_charge_unit,unit_rate_value,unit_rate_unit
+North West,51.16,p/day,27.11,p/kWh
+Northern,59.86,p/day,25.43,p/kWh
+Yorkshire,58.65,p/day,25.33,p/kWh
+Northern Scotland,61.00,p/day,27.06,p/kWh
+Southern,44.62,p/day,26.48,p/kWh
+Southern Scotland,56.55,p/day,25.84,p/kWh
+North Wales and Mersey,69.95,p/day,27.72,p/kWh
+London,46.06,p/day,25.63,p/kWh
+South East,47.60,p/day,26.92,p/kWh
+Eastern,48.25,p/day,26.53,p/kWh
+East Midlands,49.09,p/day,25.55,p/kWh
+Midlands,53.00,p/day,25.64,p/kWh
+Southern Western,54.03,p/day,26.82,p/kWh
+South Wales,51.69,p/day,26.83,p/kWh
+Great Britain average,53.68,p/day,26.35,p/kWh
