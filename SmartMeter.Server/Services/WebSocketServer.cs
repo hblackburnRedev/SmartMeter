@@ -1,123 +1,151 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using SmartMeter.Server.Services.Abstractions;
 using SmartMeter.Server.Contracts;
 using System.Net;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SmartMeter.Server.Configuration;
 
 namespace SmartMeter.Server.Services;
 
-public class WebSocketServer(IOptions<ServerConfiguration> config) : IWebSocketServer
-{
+public class WebSocketServer(
+    ILogger<WebSocketServer> logger,
+    IOptions<ServerConfiguration> config,
+    IPricingService pricingService) 
+    : IWebSocketServer
+{ 
     private readonly ConcurrentDictionary<string, string> _activeSessions = new();
     
-    public async Task StartServer()
+    private const string ClientIdHeaderName = "ClientId";
+    private const string ApiKeyHeaderName = "ApiKey";
+    
+    private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
+    {
+        PropertyNameCaseInsensitive = true
+    };
+    
+   public async Task StartServer()
     {
         using var listener = new HttpListener();
         listener.Prefixes.Add($"http://{config.Value.IpAddress}:{config.Value.Port}/");
-        listener.Start();
 
         try
         {
-            Console.WriteLine("Server started. Waiting for connections...");
+            listener.Start();
+            logger.LogInformation("WebSocket server started on {Address}:{Port}", 
+                config.Value.IpAddress, config.Value.Port);
 
             while (true)
             {
                 HttpListenerContext context = await listener.GetContextAsync();
+                var clientId = context.Request.Headers[ClientIdHeaderName];
+                var apiKey = context.Request.Headers[ApiKeyHeaderName];
 
-                // Handle authentication 
-                if (context.Request.IsWebSocketRequest)
+                if (string.IsNullOrWhiteSpace(apiKey) ||  string.IsNullOrWhiteSpace(clientId))
                 {
-                    await ProcessWebSocketRequest(context);
+                    context.Response.StatusCode = 401;
+                    byte[] msg = Encoding.UTF8.GetBytes("Unauthorized: invalid credentials.");
+                    await context.Response.OutputStream.WriteAsync(msg);
+                    context.Response.Close();
+                }
+                else if (context.Request.IsWebSocketRequest)
+                {
+                    await ProcessWebSocketRequest(context, clientId);
                 }
                 else
                 {
-                    // Reject HTTP requests
+                    logger.LogWarning("Rejected non-WebSocket request from {RemoteIP}", 
+                        context.Request.RemoteEndPoint?.Address);
+
                     context.Response.StatusCode = 400;
                     byte[] msg = Encoding.UTF8.GetBytes("This server only supports WebSocket connections.");
-                    await context.Response.OutputStream.WriteAsync(msg, 0, msg.Length);
+                    await context.Response.OutputStream.WriteAsync(msg);
                     context.Response.Close();
                 }
-
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.Message);
-            Console.WriteLine("Server stopped.");
-
-            listener.Stop();
+            logger.LogError(ex, "Fatal error in WebSocket server: {Message}", ex.Message);
+        }
+        finally
+        {
+            if (listener.IsListening)
+            {
+                listener.Stop();
+                logger.LogInformation("WebSocket server stopped.");
+            }
         }
     }
-    private async Task ProcessWebSocketRequest(HttpListenerContext context)
+   
+
+    private async Task ProcessWebSocketRequest(HttpListenerContext context, string clientId)
     {
-        HttpListenerWebSocketContext webSocketContext = await context.AcceptWebSocketAsync(null);
-        WebSocket socket = webSocketContext.WebSocket;
+        string? clientAddress = context.Request.RemoteEndPoint?.Address.ToString();
+        logger.LogInformation("Incoming WebSocket connection from {ClientAddress}", clientAddress);
 
-        byte[] buffer = new byte[1024];
-
-        // Expect first message to be authentication payload
-        WebSocketReceiveResult result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-
-        if (result.MessageType != WebSocketMessageType.Text)
-        {
-            await socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "Expected text message for authentication", CancellationToken.None);
-            return;
-        }
-
-        string authMessage = Encoding.UTF8.GetString(buffer, 0, result.Count);
-
-        AuthRequest? payload = null;
+        WebSocket? socket = null;
         try
         {
-            var options = new JsonSerializerOptions
+            HttpListenerWebSocketContext webSocketContext = await context.AcceptWebSocketAsync(null);
+            socket = webSocketContext.WebSocket;
+            logger.LogDebug("WebSocket accepted for {ClientAddress}", clientAddress);
+
+            byte[] buffer = new byte[1024];
+            
+            var sessionKey = Guid.NewGuid().ToString();
+            _activeSessions[sessionKey] = clientId;
+
+            logger.LogInformation("Client {ClientID} authenticated successfully from {ClientAddress} with session {SessionKey}", 
+                clientId, clientAddress, sessionKey);
+            
+            // Message handling loop
+            while (socket.State == WebSocketState.Open)
             {
-                PropertyNameCaseInsensitive = true
-            };
-            payload = JsonSerializer.Deserialize<AuthRequest>(authMessage, options);
-        }
-        catch
-        {
-            await socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "Invalid authentication format", CancellationToken.None);
-            return;
-        }
+                var message = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
 
-        if (payload == null || string.IsNullOrWhiteSpace(payload.ClientID) || payload.APIKey != config.Value.ApiKey)
-        {
-            await socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "Authentication failed", CancellationToken.None);
-            return;
-        }
+                if (message.MessageType == WebSocketMessageType.Text)
+                {
+                    
+                    string messageAsString = Encoding.UTF8.GetString(buffer, 0, message.Count);
+                    logger.LogInformation("Message received from {ClientID}: {Message}", clientId, messageAsString);
 
-        var sessionKey = Guid.NewGuid().ToString();
-        _activeSessions[sessionKey] = payload.ClientID;
-
-        // Optionally, send sessionKey to client
-        var response = new { success = true, message = "Authentication successful", sessionKey };
-        var responseJson = JsonSerializer.Serialize(response);
-        await socket.SendAsync(Encoding.UTF8.GetBytes(responseJson), WebSocketMessageType.Text, true, CancellationToken.None);
-
-        Console.WriteLine($"Client {payload.ClientID} authenticated and connected.");
-
-        // Now handle further messages
-        while (socket.State == WebSocketState.Open)
-        {
-            result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-
-            if (result.MessageType == WebSocketMessageType.Text)
-            {
-                string receivedMessage = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                Console.WriteLine($"Received message: {receivedMessage}");
-
-                // Echo back the received message
-                await socket.SendAsync(new ArraySegment<byte>(buffer, 0, result.Count), WebSocketMessageType.Text, true, CancellationToken.None);
+                    if (JsonSerializer.Deserialize<ReadingRequest>(messageAsString , _jsonOptions) is not ReadingRequest payload)
+                    {
+                        logger.LogWarning("Invalid authentication JSON from {ClientAddress}", clientAddress);
+                        await socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "Invalid authentication format", CancellationToken.None);
+                        return;
+                    }
+                    
+                    var pricing = await pricingService.CalculatePriceAsync(payload.Region, payload.Usage);
+                    
+                    // Echo the message
+                    await socket.SendAsync(Encoding.UTF8.GetBytes(pricing.ToString(CultureInfo.InvariantCulture)), WebSocketMessageType.Text, true, CancellationToken.None);
+                }
+                else if (message.MessageType == WebSocketMessageType.Close)
+                {
+                    logger.LogInformation("Client {ClientID} disconnected normally.", clientId);
+                    return;
+                }
             }
-            else if (result.MessageType == WebSocketMessageType.Close)
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error while handling WebSocket connection from {ClientAddress}", clientAddress);
+            
+        }
+        finally
+        {
+            if (socket?.State == WebSocketState.Open)
             {
-                await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None);
+                await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client closed", CancellationToken.None);
             }
+            
+            socket?.Dispose();
         }
     }
 }

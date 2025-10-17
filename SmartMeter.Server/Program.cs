@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using SmartMeter.Server.Configuration;
 using SmartMeter.Server.Services;
 using SmartMeter.Server.Services.Abstractions;
@@ -19,6 +20,7 @@ public class Program
         var services = CreateServices(config);
         
         var server = services.GetRequiredService<IWebSocketServer>();
+        
         try
         {
             await server.StartServer();
@@ -34,12 +36,19 @@ public class Program
     {
         var services = new ServiceCollection();
 
+        services.AddLogging(builder =>
+        {
+            builder.AddConsole();
+            builder.SetMinimumLevel(LogLevel.Information);
+        });
+
         services
             .Configure<ServerConfiguration>(configuration.GetRequiredSection("ServerConfiguration"));
         
         services
             .AddSingleton<IWebSocketServer, WebSocketServer>()
-            .AddSingleton<IFileService, FileService>();
+            .AddSingleton<IFileService, FileService>()
+            .AddSingleton<IPricingService, PricingService>();
 
         return services.BuildServiceProvider();
     }
