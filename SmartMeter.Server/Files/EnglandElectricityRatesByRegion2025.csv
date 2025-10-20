@@ -1,0 +1,16 @@
+region,standing_charge_value,standing_charge_unit,unit_rate_value,unit_rate_unit
+North West,51.16,p/day,27.11,p/kWh
+Northern,59.86,p/day,25.43,p/kWh
+Yorkshire,58.65,p/day,25.33,p/kWh
+Northern Scotland,61.00,p/day,27.06,p/kWh
+Southern,44.62,p/day,26.48,p/kWh
+Southern Scotland,56.55,p/day,25.84,p/kWh
+North Wales and Mersey,69.95,p/day,27.72,p/kWh
+London,46.06,p/day,25.63,p/kWh
+South East,47.60,p/day,26.92,p/kWh
+Eastern,48.25,p/day,26.53,p/kWh
+East Midlands,49.09,p/day,25.55,p/kWh
+Midlands,53.00,p/day,25.64,p/kWh
+Southern Western,54.03,p/day,26.82,p/kWh
+South Wales,51.69,p/day,26.83,p/kWh
+Great Britain average,53.68,p/day,26.35,p/kWh
