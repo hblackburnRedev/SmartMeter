@@ -31,6 +31,7 @@ public class Program
             Console.WriteLine(ex.Message);
             throw;
         }
+        //test change
     }
 
     private static IServiceProvider CreateServices(IConfiguration configuration)
