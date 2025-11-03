@@ -49,7 +49,6 @@ class WebSocketService {
         storageService.setConnectionStatus(false);
 
         try {
-            // Build WebSocket URL with query parameters for authentication
             // Browser WebSocket doesn't support custom headers, so we use query params
             const url = new URL(CONFIG.SERVER.URL);
             url.searchParams.append('clientId', meterId);
@@ -59,13 +58,10 @@ class WebSocketService {
             logger.debug(`Using ClientId: ${meterId}`);
             logger.debug(`Full URL: ${url.toString()}`);
 
-            // Create WebSocket connection with auth in URL
             this.ws = new WebSocket(url.toString());
 
-            // Set up event handlers
             this.setupEventHandlers();
 
-            // Wait for connection to open
             await this.waitForConnection();
 
         } catch (error) {
@@ -74,7 +70,6 @@ class WebSocketService {
             storageService.incrementConnectionAttempts();
             storageService.setError(`Connection failed: ${error.message}`);
 
-            // Attempt reconnection
             this.handleReconnection();
             throw error;
         }
@@ -88,7 +83,7 @@ class WebSocketService {
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
                 reject(new Error('Connection timeout'));
-            }, 10000); // 10 second timeout
+            }, 10000);
 
             this.ws.onopen = () => {
                 clearTimeout(timeout);
@@ -134,7 +129,6 @@ class WebSocketService {
         try {
             logger.debug('Message received', event.data);
 
-            // Server sends decimal as plain string (e.g., "36.12")
             const billAmount = parseDecimal(event.data, 0);
 
             if (billAmount > 0) {
@@ -160,14 +154,12 @@ class WebSocketService {
 
         storageService.setConnectionStatus(false);
 
-        // Normal closure
         if (event.code === 1000) {
             logger.info('Normal closure - not reconnecting');
             this.shouldReconnect = false;
             return;
         }
 
-        // Unauthorized
         if (event.code === 1008) {
             logger.error('Unauthorized - check API key');
             storageService.setError('Unauthorized: Invalid API key or Client ID');
@@ -175,7 +167,6 @@ class WebSocketService {
             return;
         }
 
-        // Unexpected closure - attempt reconnection
         storageService.setError('Connection lost. Reconnecting...');
         this.handleReconnection();
     }
@@ -308,5 +299,4 @@ class WebSocketService {
     }
 }
 
-// Export singleton instance
 export const websocketService = new WebSocketService();

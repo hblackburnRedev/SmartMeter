@@ -21,7 +21,6 @@ class Application {
         this.region = null;
         this.initialized = false;
 
-        // DOM elements (will be populated on init)
         this.elements = {
             status: null,
             reading: null,
@@ -41,32 +40,23 @@ class Application {
         try {
             logger.info('Initializing Smart Meter Client');
 
-            // Validate configuration
             validateConfig();
 
-            // Generate unique meter ID and select region
             this.meterId = generateMeterId();
-            this.region = getRandomRegion();
 
             logger.info(`Meter ID: ${this.meterId}`);
             logger.info(`Region: ${this.region}`);
 
-            // Initialize DOM elements
             this.initializeDOMElements();
 
-            // Initialize storage service
             storageService.initialize(this.meterId, this.region);
 
-            // Subscribe to state changes
             this.subscribeToEvents();
 
-            // Update initial UI
             this.updateUI();
 
-            // Connect to server
             await this.connectToServer();
 
-            // Start meter service
             this.startMeterService();
 
             this.initialized = true;
@@ -94,16 +84,14 @@ class Application {
             gaugeProgress: document.getElementById('gauge-progress')
         };
 
-        // Verify all elements exist
         for (const [key, element] of Object.entries(this.elements)) {
             if (!element) {
                 throw new Error(`DOM element not found: ${key}`);
             }
         }
 
-        // Calculate gauge circumference for animations
-        this.gaugeCircumference = 2 * Math.PI * 85; // radius = 85
-        this.maxReading = 10; // Maximum reading for gauge (10 kWh)
+        this.gaugeCircumference = 2 * Math.PI * 85;
+        this.maxReading = 10;
 
         logger.debug('DOM elements initialized');
     }
@@ -112,27 +100,22 @@ class Application {
      * Subscribe to storage service events
      */
     subscribeToEvents() {
-        // Reading updates
         storageService.subscribe('reading', (reading) => {
             this.updateReading(reading);
         });
 
-        // Bill updates
         storageService.subscribe('bill', (bill) => {
             this.updateBill(bill);
         });
 
-        // Connection status changes
         storageService.subscribe('connection', (isConnected) => {
             this.updateConnectionStatus(isConnected);
         });
 
-        // Error messages
         storageService.subscribe('error', (error) => {
             this.showError(error);
         });
 
-        // Alert messages
         storageService.subscribe('alert', (alert) => {
             this.showAlert(alert);
         });
@@ -161,14 +144,13 @@ class Application {
     startMeterService() {
         logger.info('Starting meter service...');
 
-        // Start meter with callback to send readings via WebSocket
         meterService.start(async (reading) => {
             try {
                 await websocketService.sendReading(reading);
             } catch (error) {
                 logger.error('Failed to send reading', error);
             }
-        }, 2000); // 2 second initial delay
+        }, 2000);
 
         logger.info('Meter service started');
     }
@@ -202,16 +184,14 @@ class Application {
      */
     updateReading(reading) {
         if (this.elements.reading) {
-            // Update text value
+
             this.elements.reading.textContent = reading.toFixed(3);
 
-            // Add update animation
             this.elements.reading.classList.add('updating');
             setTimeout(() => {
                 this.elements.reading.classList.remove('updating');
             }, 300);
 
-            // Update gauge progress
             this.updateGauge(reading);
 
             logger.debug(`UI updated: Reading = ${reading} kWh`);
@@ -225,13 +205,10 @@ class Application {
     updateGauge(reading) {
         if (!this.elements.gaugeProgress) return;
 
-        // Calculate progress (0-100%)
         const percentage = Math.min((reading / this.maxReading) * 100, 100);
 
-        // Calculate stroke offset
         const offset = this.gaugeCircumference - (percentage / 100) * this.gaugeCircumference;
 
-        // Update the gauge
         this.elements.gaugeProgress.style.strokeDashoffset = offset;
 
         logger.debug(`Gauge updated: ${percentage.toFixed(1)}%`);
@@ -245,7 +222,6 @@ class Application {
         if (this.elements.bill) {
             this.elements.bill.textContent = formatCurrency(bill);
 
-            // Add update animation
             this.elements.bill.classList.add('updating');
             setTimeout(() => {
                 this.elements.bill.classList.remove('updating');
@@ -273,7 +249,6 @@ class Application {
 
         logger.debug(`UI updated: Connection status = ${statusText}`);
 
-        // Clear error on successful connection
         if (isConnected) {
             this.hideError();
         }
@@ -311,7 +286,6 @@ class Application {
         this.elements.alertText.textContent = message;
         this.elements.alert.classList.add('show');
 
-        // Auto-hide after 10 seconds
         setTimeout(() => {
             this.hideAlert();
         }, 10000);
@@ -334,20 +308,16 @@ class Application {
     cleanup() {
         logger.info('Cleaning up application...');
 
-        // Stop meter service
         meterService.stop();
 
-        // Disconnect from server
         websocketService.disconnect();
 
         logger.info('Cleanup complete');
     }
 }
 
-// Create application instance
 const app = new Application();
 
-// Initialize when DOM is ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         app.init().catch(error => {
@@ -355,16 +325,13 @@ if (document.readyState === 'loading') {
         });
     });
 } else {
-    // DOM already loaded
     app.init().catch(error => {
         console.error('Failed to initialize application:', error);
     });
 }
 
-// Cleanup on window close
 window.addEventListener('beforeunload', () => {
     app.cleanup();
 });
 
-// Export for testing/debugging
 export { app };

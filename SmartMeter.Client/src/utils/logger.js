@@ -3,7 +3,6 @@
  * Provides consistent logging with different levels and timestamps
  */
 
-// Log levels
 const LogLevel = {
     DEBUG: 'DEBUG',
     INFO: 'INFO',
@@ -11,7 +10,6 @@ const LogLevel = {
     ERROR: 'ERROR'
 };
 
-// ANSI color codes for console output
 const Colors = {
     DEBUG: '\x1b[36m',   // Cyan
     INFO: '\x1b[32m',    // Green
@@ -125,8 +123,6 @@ export function createLogger(context = '') {
     return new Logger(context);
 }
 
-// Export default logger for general use
 export const logger = new Logger();
 
-// Export LogLevel for external use if needed
 export { LogLevel };

@@ -1,21 +1,16 @@
 /**
  * Script to launch multiple Smart Meter clients
- * Usage: node run-multiple.js [number_of_clients]
- * Example: node run-multiple.js 12
  */
 
 import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// Get __dirname equivalent in ES6 modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Get number of clients from command line argument (default: 12)
 const numClients = parseInt(process.argv[2]) || 12;
 
-// Validate input
 if (numClients < 1 || numClients > 50) {
     console.error('Error: Number of clients must be between 1 and 50');
     process.exit(1);
@@ -26,10 +21,8 @@ console.log('  Smart Meter Client - Multi-Instance');
 console.log('===========================================');
 console.log(`Starting ${numClients} client(s)...\n`);
 
-// Store child processes
 const clients = [];
 
-// Track startup progress
 let startedCount = 0;
 
 /**
@@ -40,16 +33,14 @@ function launchClient(index) {
     return new Promise((resolve) => {
         const clientNumber = index + 1;
 
-        // Spawn electron process
         const client = spawn('npm', ['start'], {
             shell: true,
             cwd: __dirname,
-            stdio: 'inherit' // Inherit stdio to see all logs
+            stdio: 'inherit'
         });
 
         clients.push(client);
 
-        // Handle client exit
         client.on('exit', (code, signal) => {
             if (code !== 0 && code !== null) {
                 console.log(`\nClient ${clientNumber} exited with code ${code}`);
@@ -60,11 +51,9 @@ function launchClient(index) {
             console.error(`\nClient ${clientNumber} error:`, error.message);
         });
 
-        // Log startup
         console.log(`[${clientNumber}/${numClients}] Client started`);
         startedCount++;
 
-        // Small delay before resolving to stagger launches
         setTimeout(() => {
             resolve();
         }, 100);
@@ -98,7 +87,6 @@ function cleanup() {
     console.log('Shutting down all clients...');
     console.log('===========================================\n');
 
-    // Kill all client processes
     clients.forEach((client, index) => {
         try {
             if (!client.killed) {
@@ -114,19 +102,15 @@ function cleanup() {
     process.exit(0);
 }
 
-// Handle Ctrl+C (SIGINT)
 process.on('SIGINT', cleanup);
 
-// Handle terminal close (SIGTERM)
 process.on('SIGTERM', cleanup);
 
-// Handle uncaught exceptions
 process.on('uncaughtException', (error) => {
     console.error('\nUncaught Exception:', error);
     cleanup();
 });
 
-// Start launching clients
 launchAllClients().catch((error) => {
     console.error('\nError launching clients:', error);
     cleanup();

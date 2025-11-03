@@ -22,11 +22,9 @@
     </div>
 
     <div class="meter-card">
-        <!-- Gauge Section -->
         <div class="gauge-section">
             <div class="gauge-label">Current Reading</div>
             <div class="gauge-container">
-                <!-- SVG Gauge -->
                 <svg class="gauge-svg" viewBox="0 0 200 200">
                     <defs>
                         <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -34,9 +32,7 @@
                             <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:1" />
                         </linearGradient>
                     </defs>
-                    <!-- Background circle -->
                     <circle class="gauge-bg" cx="100" cy="100" r="85" />
-                    <!-- Progress circle -->
                     <circle
                             id="gauge-progress"
                             class="gauge-progress"
@@ -48,7 +44,6 @@
                     />
                 </svg>
 
-                <!-- Center content -->
                 <div class="gauge-content">
                     <svg class="gauge-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -59,13 +54,11 @@
             </div>
         </div>
 
-        <!-- Bill Section -->
         <div class="bill-section">
             <div class="bill-label">Current Bill</div>
             <div id="bill" class="bill-value">£0.00</div>
         </div>
 
-        <!-- Info Section -->
         <div class="info-section">
             <div class="info-row">
                 <span class="info-label">Meter ID</span>
@@ -74,7 +67,6 @@
         </div>
     </div>
 
-    <!-- Error Notification -->
     <div id="error" class="notification error">
         <svg class="notification-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -82,7 +74,6 @@
         <span id="error-text"></span>
     </div>
 
-    <!-- Alert Notification -->
     <div id="alert" class="notification alert">
         <svg class="notification-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />

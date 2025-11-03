@@ -85,13 +85,10 @@ class MeterService {
      * @returns {number} New cumulative reading
      */
     generateReading() {
-        // Get current reading from storage
         const currentReading = storageService.getCurrentReading();
 
-        // Generate random increment (0.1 - 0.5 kWh)
         const increment = generateReadingIncrement();
 
-        // Calculate new cumulative reading
         const newReading = roundTo(currentReading + increment, 3);
 
         logger.debug(`Generated reading: ${newReading} kWh (increment: ${increment} kWh)`);
@@ -109,13 +106,10 @@ class MeterService {
         }
 
         try {
-            // Generate new reading
             const newReading = this.generateReading();
 
-            // Update storage
             storageService.updateReading(newReading);
 
-            // Call callback to send reading (e.g., via WebSocket)
             if (this.readingCallback) {
                 await this.readingCallback(newReading);
             }
@@ -141,49 +135,31 @@ class MeterService {
             return;
         }
 
-        // Generate random interval if not provided
         const interval = delay !== null ? delay : generateReadingInterval();
 
         logger.debug(`Next reading scheduled in ${formatMilliseconds(interval)}`);
 
-        // Clear any existing timeout
         if (this.nextReadingTimeout) {
             clearTimeout(this.nextReadingTimeout);
         }
 
-        // Schedule next reading
         this.nextReadingTimeout = setTimeout(() => {
             this.processReading();
         }, interval);
     }
 
     /**
-     * Force an immediate reading (useful for testing)
+     * Force an immediate reading (for testing)
      */
     forceReading() {
         logger.info('Forcing immediate reading');
 
-        // Clear scheduled reading
         if (this.nextReadingTimeout) {
             clearTimeout(this.nextReadingTimeout);
             this.nextReadingTimeout = null;
         }
 
-        // Process reading immediately
         this.processReading();
-    }
-
-    /**
-     * Get next reading time estimate
-     * @returns {string|null} Estimated time until next reading
-     */
-    getNextReadingInfo() {
-        if (!this.isRunning || !this.nextReadingTimeout) {
-            return null;
-        }
-
-        // Note: Can't get exact time from timeout, would need to track separately
-        return 'Scheduled';
     }
 
     /**
@@ -194,12 +170,10 @@ class MeterService {
 
         this.stop();
 
-        // Reset storage reading to initial value
         storageService.updateReading(0);
 
         logger.info('Meter service reset complete');
     }
 }
 
-// Export singleton instance
 export const meterService = new MeterService();

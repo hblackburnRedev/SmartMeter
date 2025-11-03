@@ -4,20 +4,17 @@
  */
 
 export const CONFIG = {
-    // Server Connection Settings
     SERVER: {
         URL: 'ws://127.0.0.1:8080',
-        RECONNECT_DELAY: 3000,           // 3 seconds
+        RECONNECT_DELAY: 3000,
         MAX_RECONNECT_ATTEMPTS: 5
     },
 
-    // Authentication
     AUTH: {
-        API_KEY: '2B798FB1-F4EA-426C-B8B9-19DD0A946A4F',  // Must match server's ApiKey in appsettings.json
+        API_KEY: '2B798FB1-F4EA-426C-B8B9-19DD0A946A4F',
         CLIENT_ID_PREFIX: 'METER_'
     },
 
-    // UK Electricity Regions (matching server CSV)
     REGIONS: [
         'North West',
         'Northern',
@@ -36,17 +33,15 @@ export const CONFIG = {
         'Great Britain average'
     ],
 
-    // Meter Settings
     METER: {
-        DEFAULT_REGION: 'London',        // Default UK region
-        MIN_READING_INCREMENT: 0.1,      // kWh
-        MAX_READING_INCREMENT: 0.5,      // kWh
-        MIN_INTERVAL: 15000,             // 15 seconds in milliseconds
-        MAX_INTERVAL: 60000,             // 60 seconds in milliseconds
-        INITIAL_READING: 0               // Starting kWh reading
+        DEFAULT_REGION: 'London',
+        MIN_READING_INCREMENT: 0.1,
+        MAX_READING_INCREMENT: 0.5,
+        MIN_INTERVAL: 15000,
+        MAX_INTERVAL: 60000,
+        INITIAL_READING: 0
     },
 
-    // UI Settings
     UI: {
         CURRENCY_SYMBOL: '£',
         READING_UNIT: 'kWh',

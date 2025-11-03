@@ -15,34 +15,27 @@ const logger = createLogger('StorageService');
 class StorageService {
     constructor() {
         this.state = {
-            // Client identification
             meterId: null,
             region: CONFIG.METER.DEFAULT_REGION,
 
-            // Meter readings
             currentReading: CONFIG.METER.INITIAL_READING,
             lastReading: CONFIG.METER.INITIAL_READING,
             readingHistory: [],
 
-            // Billing
             currentBill: 0,
             lastBill: 0,
 
-            // Connection state
             isConnected: false,
             connectionAttempts: 0,
             lastConnectionTime: null,
 
-            // Errors and alerts
             lastError: null,
             lastAlert: null,
 
-            // Statistics
             totalReadingsSent: 0,
             sessionStartTime: new Date()
         };
 
-        // Event listeners for state changes
         this.listeners = {
             reading: [],
             bill: [],
@@ -122,7 +115,6 @@ class StorageService {
         this.state.lastReading = this.state.currentReading;
         this.state.currentReading = reading;
 
-        // Add to history (keep last 100 readings)
         this.state.readingHistory.push({
             reading,
             timestamp: new Date(),
@@ -167,7 +159,6 @@ class StorageService {
             logger.warn('Connection status: Disconnected');
         }
 
-        // Only notify if status changed
         if (wasConnected !== connected) {
             this.notifyListeners('connection', connected);
         }
@@ -323,5 +314,4 @@ class StorageService {
     }
 }
 
-// Export singleton instance
 export const storageService = new StorageService();
