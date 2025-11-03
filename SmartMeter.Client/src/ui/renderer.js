@@ -90,7 +90,8 @@ class Application {
             errorText: document.getElementById('error-text'),
             alert: document.getElementById('alert'),
             alertText: document.getElementById('alert-text'),
-            meterId: document.getElementById('meter-id')
+            meterId: document.getElementById('meter-id'),
+            gaugeProgress: document.getElementById('gauge-progress')
         };
 
         // Verify all elements exist
@@ -99,6 +100,10 @@ class Application {
                 throw new Error(`DOM element not found: ${key}`);
             }
         }
+
+        // Calculate gauge circumference for animations
+        this.gaugeCircumference = 2 * Math.PI * 85; // radius = 85
+        this.maxReading = 10; // Maximum reading for gauge (10 kWh)
 
         logger.debug('DOM elements initialized');
     }
@@ -190,15 +195,46 @@ class Application {
         }
     }
 
+
     /**
-     * Update reading display
+     * Update reading display and animate gauge
      * @param {number} reading - Current reading in kWh
      */
     updateReading(reading) {
         if (this.elements.reading) {
-            this.elements.reading.textContent = formatReading(reading);
+            // Update text value
+            this.elements.reading.textContent = reading.toFixed(3);
+
+            // Add update animation
+            this.elements.reading.classList.add('updating');
+            setTimeout(() => {
+                this.elements.reading.classList.remove('updating');
+            }, 300);
+
+            // Update gauge progress
+            this.updateGauge(reading);
+
             logger.debug(`UI updated: Reading = ${reading} kWh`);
         }
+    }
+
+    /**
+     * Update the circular gauge animation
+     * @param {number} reading - Current reading in kWh
+     */
+    updateGauge(reading) {
+        if (!this.elements.gaugeProgress) return;
+
+        // Calculate progress (0-100%)
+        const percentage = Math.min((reading / this.maxReading) * 100, 100);
+
+        // Calculate stroke offset
+        const offset = this.gaugeCircumference - (percentage / 100) * this.gaugeCircumference;
+
+        // Update the gauge
+        this.elements.gaugeProgress.style.strokeDashoffset = offset;
+
+        logger.debug(`Gauge updated: ${percentage.toFixed(1)}%`);
     }
 
     /**
@@ -208,10 +244,17 @@ class Application {
     updateBill(bill) {
         if (this.elements.bill) {
             this.elements.bill.textContent = formatCurrency(bill);
+
+            // Add update animation
+            this.elements.bill.classList.add('updating');
+            setTimeout(() => {
+                this.elements.bill.classList.remove('updating');
+            }, 300);
+            
             logger.debug(`UI updated: Bill = £${bill.toFixed(2)}`);
         }
     }
-
+    
     /**
      * Update connection status display
      * @param {boolean} isConnected - Connection status

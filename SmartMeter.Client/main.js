@@ -19,7 +19,7 @@ let mainWindow = null;
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 500,
-        height: 600,
+        height: 800,  // Increased from 600 to 700
         resizable: false,
         webPreferences: {
             nodeIntegration: true,
@@ -27,7 +27,7 @@ function createWindow() {
             enableRemoteModule: false
         },
         title: 'Smart Meter Client',
-        backgroundColor: '#f8fafc'
+        backgroundColor: '#1e3a8a'  // Match gradient background
     });
 
     // Load the index.html file
