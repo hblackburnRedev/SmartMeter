@@ -1,33 +1,98 @@
-﻿const { app, BrowserWindow } = require('electron');
-const path = require('path');
+﻿/**
+ * Electron Main Process
+ * Creates and manages application window
+ */
 
+import { app, BrowserWindow } from 'electron';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get __dirname equivalent in ES6 modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+let mainWindow = null;
+
+/**
+ * Create the main application window
+ */
 function createWindow() {
-    const win = new BrowserWindow({
-        width: 600,
-        height: 400,
+    mainWindow = new BrowserWindow({
+        width: 500,
+        height: 600,
+        resizable: false,
         webPreferences: {
             nodeIntegration: true,
-            contextIsolation: false
-        }
+            contextIsolation: false,
+            enableRemoteModule: false
+        },
+        title: 'Smart Meter Client',
+        backgroundColor: '#f8fafc'
     });
 
-    win.loadFile('index.html');
+    // Load the index.html file
+    const indexPath = path.join(__dirname, 'src', 'index.html');
+    mainWindow.loadFile(indexPath);
 
+    // Open DevTools if --dev flag is passed
     if (process.argv.includes('--dev')) {
-        win.webContents.openDevTools();
+        mainWindow.webContents.openDevTools();
     }
+
+    // Handle window closed
+    mainWindow.on('closed', () => {
+        mainWindow = null;
+    });
+
+    // Log when window is ready
+    mainWindow.webContents.on('did-finish-load', () => {
+        console.log('Window loaded successfully');
+    });
+
+    // Handle any load errors
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+        console.error('Failed to load:', errorCode, errorDescription);
+    });
 }
 
-app.whenReady().then(createWindow);
+/**
+ * App ready event - create window
+ */
+app.whenReady().then(() => {
+    console.log('Electron app ready');
+    createWindow();
 
+    // On macOS, re-create window when dock icon is clicked
+    app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
+            createWindow();
+        }
+    });
+});
+
+/**
+ * Quit when all windows are closed (except on macOS)
+ */
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
         app.quit();
     }
 });
 
-app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-        createWindow();
-    }
+/**
+ * Handle app quit
+ */
+app.on('will-quit', () => {
+    console.log('Application shutting down');
+});
+
+/**
+ * Handle uncaught exceptions
+ */
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });

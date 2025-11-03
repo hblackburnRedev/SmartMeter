@@ -28,7 +28,7 @@ public class WebSocketServer(
         PropertyNameCaseInsensitive = true
     };
     
-   public async Task StartServer()
+    public async Task StartServer()
     {
         using var listener = new HttpListener();
         listener.Prefixes.Add($"http://{config.Value.IpAddress}:{config.Value.Port}/");
@@ -42,15 +42,31 @@ public class WebSocketServer(
             while (true)
             {
                 HttpListenerContext context = await listener.GetContextAsync();
-                var clientId = context.Request.Headers[ClientIdHeaderName];
-                var apiKey = context.Request.Headers[ApiKeyHeaderName];
+                
+                // Support both query parameters (for browser WebSocket) and headers
+                var clientId = context.Request.QueryString["clientId"] 
+                              ?? context.Request.Headers[ClientIdHeaderName];
+                var apiKey = context.Request.QueryString["apiKey"] 
+                            ?? context.Request.Headers[ApiKeyHeaderName];
 
-                if (string.IsNullOrWhiteSpace(apiKey) ||  string.IsNullOrWhiteSpace(clientId))
+                if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(clientId))
                 {
                     context.Response.StatusCode = 401;
                     byte[] msg = Encoding.UTF8.GetBytes("Unauthorized: invalid credentials.");
                     await context.Response.OutputStream.WriteAsync(msg);
                     context.Response.Close();
+                    
+                    logger.LogWarning("Unauthorized connection attempt - missing credentials");
+                }
+                else if (apiKey != config.Value.ApiKey)
+                {
+                    // Validate API key matches configuration
+                    context.Response.StatusCode = 401;
+                    byte[] msg = Encoding.UTF8.GetBytes("Unauthorized: invalid API key.");
+                    await context.Response.OutputStream.WriteAsync(msg);
+                    context.Response.Close();
+                    
+                    logger.LogWarning("Unauthorized connection attempt - invalid API key from client {ClientId}", clientId);
                 }
                 else if (context.Request.IsWebSocketRequest)
                 {
@@ -81,7 +97,6 @@ public class WebSocketServer(
             }
         }
     }
-   
 
     private async Task ProcessWebSocketRequest(HttpListenerContext context, string clientId)
     {
@@ -110,21 +125,26 @@ public class WebSocketServer(
 
                 if (message.MessageType == WebSocketMessageType.Text)
                 {
-                    
                     string messageAsString = Encoding.UTF8.GetString(buffer, 0, message.Count);
                     logger.LogInformation("Message received from {ClientID}: {Message}", clientId, messageAsString);
+                    
+                    logger.LogInformation("About to deserialize with case insensitive: {CaseInsensitive}", _jsonOptions.PropertyNameCaseInsensitive);
 
-                    if (JsonSerializer.Deserialize<ReadingRequest>(messageAsString , _jsonOptions) is not ReadingRequest payload)
+                    if (JsonSerializer.Deserialize<ReadingRequest>(messageAsString, _jsonOptions) is not ReadingRequest payload)
                     {
-                        logger.LogWarning("Invalid authentication JSON from {ClientAddress}", clientAddress);
-                        await socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "Invalid authentication format", CancellationToken.None);
+                        logger.LogWarning("Invalid message format from {ClientAddress}", clientAddress);
+                        await socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "Invalid message format", CancellationToken.None);
                         return;
                     }
 
                     var pricing = await pricingService.CalculatePriceAsync(payload.Region, payload.Usage, clientId);
                     
-                    // Echo the message
-                    await socket.SendAsync(Encoding.UTF8.GetBytes(pricing.ToString(CultureInfo.InvariantCulture)), WebSocketMessageType.Text, true, CancellationToken.None);
+                    // Send calculated price back to client
+                    await socket.SendAsync(
+                        Encoding.UTF8.GetBytes(pricing.ToString(CultureInfo.InvariantCulture)), 
+                        WebSocketMessageType.Text, 
+                        true, 
+                        CancellationToken.None);
                 }
                 else if (message.MessageType == WebSocketMessageType.Close)
                 {
@@ -136,7 +156,6 @@ public class WebSocketServer(
         catch (Exception ex)
         {
             logger.LogError(ex, "Error while handling WebSocket connection from {ClientAddress}", clientAddress);
-            
         }
         finally
         {

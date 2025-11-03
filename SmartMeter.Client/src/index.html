@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -179,7 +179,6 @@
 <div class="container">
     <div class="header">
         <div class="title">
-            <!-- Bolt icon -->
             <svg class="title-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
@@ -195,20 +194,18 @@
         <div class="card-section">
             <div class="metric">
                 <div class="metric-label">
-                    <!-- Lightning bolt icon -->
                     <svg class="metric-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                     Current Reading
                 </div>
-                <div class="metric-value" id="reading">0.00 kWh</div>
+                <div class="metric-value" id="reading">0.000 kWh</div>
             </div>
         </div>
 
         <div class="card-section">
             <div class="metric">
                 <div class="metric-label">
-                    <!-- Currency icon -->
                     <svg class="metric-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
@@ -219,18 +216,14 @@
         </div>
     </div>
 
-    <!-- Error notification -->
     <div id="error" class="notification error">
-        <!-- Exclamation circle icon -->
         <svg class="notification-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <span id="error-text"></span>
     </div>
 
-    <!-- Alert notification -->
     <div id="alert" class="notification alert">
-        <!-- Exclamation triangle icon -->
         <svg class="notification-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
@@ -242,6 +235,6 @@
     </div>
 </div>
 
-<script src="renderer.js"></script>
+<script type="module" src="ui/renderer.js"></script>
 </body>
 </html>
