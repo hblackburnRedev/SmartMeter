@@ -142,4 +142,45 @@ public class PricingService(ILogger<PricingService> logger, IOptions<ReadingConf
             throw;
         }
     }
+    
+    public async Task<IList<ClientReadingEntry>> GetClientReadingsForDateAsync(string clientId, DateTime date)
+    {
+        var clientReadingsPath = Path.Combine(config.Value.UserReadingsDirectory, clientId);
+        var filePath = Path.Combine(clientReadingsPath, $"{date:dd-MM-yyyy}.csv");
+
+        try
+        {
+            if (!File.Exists(filePath))
+            {
+                logger.LogInformation("No readings file found for client {ClientID} on {Date}", clientId, date.ToString("dd-MM-yyyy"));
+                return new List<ClientReadingEntry>();
+            }
+
+            logger.LogDebug("Reading client readings from {Path}", filePath);
+
+            var fileContent = await fileService.ReadFileAsync(filePath);
+            using var reader = new StringReader(fileContent);
+
+            var csvConfig = new CsvConfiguration(CultureInfo.InvariantCulture)
+            {
+                HasHeaderRecord = false,       // we wrote these without headers
+                TrimOptions = TrimOptions.Trim,
+                IgnoreBlankLines = true
+            };
+            
+            using var csv = new CsvReader(reader, csvConfig);
+            var records = csv.GetRecords<ClientReadingEntry>().ToList();
+
+            logger.LogInformation("Loaded {Count} readings for client {ClientID} on {Date}",
+                records.Count, clientId, date.ToString("dd-MM-yyyy"));
+
+            return records;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to read client readings for client {ClientID} on {Date}",
+                clientId, date.ToString("dd-MM-yyyy"));
+            throw;
+        }
+    }
 }
