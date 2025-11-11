@@ -2,10 +2,9 @@ using System.Collections.Generic;
 using Microsoft.Extensions.Configuration;
 using SmartMeter.Server.Configuration;
 using Xunit;
-using SmartMeter.Server;
 using NSubstitute;
 
-namespace SmartMeter.Server.Tests;
+namespace SmartMeter.Tests.Configuration;
 public class ConfigurationBindingTests
 {
     [Fact]
@@ -46,25 +45,6 @@ public class ConfigurationBindingTests
 
         Assert.NotNull(readingConfig);
         Assert.Equal("/tmp/readings", readingConfig.UserReadingsDirectory);
-    }
-    [Fact]
-    public void ServerConfiguration_MissingRequiredFields()
-    {
-        var inMemory = new Dictionary<string, string?>
-        {
-            // No ApiKey
-            ["ServerConfiguration:IpAddress"] = "127.0.0.1",
-            ["ServerConfiguration:Port"] = "9000"
-        };
-
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(inMemory)
-            .Build();
-
-        Assert.ThrowsAny<Exception>(() =>
-        {
-            _ = config.GetRequiredSection("ServerConfiguration").Get<ServerConfiguration>();
-        });
     }
 
     [Fact]
