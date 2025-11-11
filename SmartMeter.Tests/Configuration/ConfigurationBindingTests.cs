@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using Microsoft.Extensions.Configuration;
 using SmartMeter.Server.Configuration;
 using Xunit;
-using NSubstitute;
 
 namespace SmartMeter.Tests.Configuration;
 public class ConfigurationBindingTests
