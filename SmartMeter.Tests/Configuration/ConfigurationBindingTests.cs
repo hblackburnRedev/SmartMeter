@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Microsoft.Extensions.Configuration;
 using SmartMeter.Server.Configuration;
 using Xunit;
+using FluentAssertions;
 
 namespace SmartMeter.Tests.Configuration;
 public class ConfigurationBindingTests
@@ -9,6 +10,7 @@ public class ConfigurationBindingTests
     [Fact]
     public void ServerConfiguration_BindsFromJson()
     {
+        //ARRANGE
         var inMemory = new Dictionary<string, string?>
         {
             ["ServerConfiguration:ApiKey"] = "secret",
@@ -20,17 +22,26 @@ public class ConfigurationBindingTests
             .AddInMemoryCollection(inMemory)
             .Build();
 
-        var serverConfig = config.GetRequiredSection("ServerConfiguration").Get<ServerConfiguration>();
+        //ACT
+        var serverConfig = config
+            .GetRequiredSection("ServerConfiguration")
+            .Get<ServerConfiguration>();
 
+        // ASSERT
         Assert.NotNull(serverConfig);
-        Assert.Equal("secret", serverConfig.ApiKey);
-        Assert.Equal("127.0.0.1", serverConfig.IpAddress);
-        Assert.Equal(9000, serverConfig.Port);
+        serverConfig.Should().Be(new ServerConfiguration
+        {
+            ApiKey = "secret",
+            IpAddress = "127.0.0.1",
+            Port = 9000
+        });
     }
 
     [Fact]
     public void ReadingConfiguration_BindsFromJson()
     {
+
+        //ARRANGE
         var inMemory = new Dictionary<string, string?>
         {
             ["ReadingConfiguration:UserReadingsDirectory"] = "/tmp/readings"
@@ -40,15 +51,22 @@ public class ConfigurationBindingTests
             .AddInMemoryCollection(inMemory)
             .Build();
 
+        //ACT
         var readingConfig = config.GetRequiredSection("ReadingConfiguration").Get<ReadingConfiguration>();
 
+        //ASSERT
         Assert.NotNull(readingConfig);
-        Assert.Equal("/tmp/readings", readingConfig.UserReadingsDirectory);
+
+        readingConfig.Should().Be(new ReadingConfiguration
+        {
+            UserReadingsDirectory = "/tmp/readings"
+        });
     }
 
     [Fact]
     public void ReadingConfiguration_MissingRequiredFields()
     {
+        //ARRANGE
         var inMemory = new Dictionary<string, string?>
         {
             // No UserReadingsDirectory
@@ -58,9 +76,12 @@ public class ConfigurationBindingTests
             .AddInMemoryCollection(inMemory)
             .Build();
 
-        Assert.ThrowsAny<Exception>(() =>
-        {
-            _ = config.GetRequiredSection("ReadingConfiguration").Get<ReadingConfiguration>();
-        });
+        // ACT + ASSERT
+        FluentActions
+            .Invoking(() => config
+                .GetRequiredSection("ReadingConfiguration")
+                .Get<ReadingConfiguration>())
+            .Should()
+            .Throw<Exception>();
     }
 }
