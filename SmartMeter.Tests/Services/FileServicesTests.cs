@@ -1,10 +1,11 @@
-﻿using System;
-using System.IO;
-using System.Threading.Tasks;
+﻿using FluentAssertions;
 using Microsoft.Extensions.Logging;
+using NSubstitute;
 using SmartMeter.Server.Services;
 using SmartMeter.Server.Services.Abstractions;
-using NSubstitute;
+using System;
+using System.IO;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace SmartMeter.Tests.Services;
@@ -25,39 +26,57 @@ public sealed class FileServiceTests : IDisposable
     [Fact]
     public async Task ReadFile_FileExists_ReturnsFileContent()
     {
+        //ARRANGE
         var testPath = Path.Combine(_tempDir, "sample.txt");
         const string expectedContent = "hello smart meter";
+
         await File.WriteAllTextAsync(testPath, expectedContent);
 
+        //ACT
         var content = await _service.ReadFileAsync(testPath);
 
-        Assert.Equal(expectedContent, content);
+        //ASSERT
+        content.Should().Be(expectedContent);
     }
 
     [Fact]
     public async Task ReadFile_FileDoesNotExist_ThrowsFileNotFoundException()
     {
+        // ARRANGE
         var nonExistentPath = Path.Combine(_tempDir, "missing.txt");
 
-        await Assert.ThrowsAsync<FileNotFoundException>(() =>
-            _service.ReadFileAsync(nonExistentPath));
+        // ACT
+        Func<Task> act = () => _service.ReadFileAsync(nonExistentPath);
+
+        // ASSERT
+        await act.Should().ThrowAsync<FileNotFoundException>();
     }
 
     [Fact]
     public async Task ReadFile_WhenIOExceptionOccurs_PropagatesException()
     {
-        // simulate an invalid path to trigger IOException
-        var invalidPath = Path.Combine("?:", "invalidpath.txt");
+        // ARRANGE
+        // Simulate invalid path to trigger an exception on Windows
+        var invalidPath = Path.Combine("?:", "invalid", "file.txt");
 
-        await Assert.ThrowsAnyAsync<Exception>(() =>
-            _service.ReadFileAsync(invalidPath));
+        // ACT
+        Func<Task> act = () => _service.ReadFileAsync(invalidPath);
+
+        // ASSERT
+        await act.Should().ThrowAsync<Exception>();
     }
 
     [Fact]
     public async Task SaveFile_ThrowsNotImplementedException()
     {
-        await Assert.ThrowsAsync<NotImplementedException>(() =>
-            _service.SaveFileAsync<string>("dummy.txt"));
+        // ARRANGE
+        var path = Path.Combine(_tempDir, "dummy.txt");
+
+        // ACT
+        Func<Task> act = () => _service.SaveFileAsync<string>(path);
+
+        // ASSERT
+        await act.Should().ThrowAsync<NotImplementedException>();
     }
 
     public void Dispose()

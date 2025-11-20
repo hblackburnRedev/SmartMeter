@@ -82,6 +82,6 @@ public class ConfigurationBindingTests
                 .GetRequiredSection("ReadingConfiguration")
                 .Get<ReadingConfiguration>())
             .Should()
-            .Throw<Exception>();
+            .Throw<InvalidOperationException>();
     }
 }

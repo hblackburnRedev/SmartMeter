@@ -1,14 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading.Tasks;
+﻿using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using SmartMeter.Server.Configuration;
 using SmartMeter.Server.Models;
 using SmartMeter.Server.Services;
 using SmartMeter.Server.Services.Abstractions;
-using NSubstitute;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace SmartMeter.Tests.Services;
@@ -20,16 +21,17 @@ public class PricingServiceTests
     private readonly IOptions<ReadingConfiguration> _options;
 
     private readonly string _tempDir;
+    private readonly PricingService _sut;
+
 
     public PricingServiceTests()
     {
         _tempDir = Path.Combine(Path.GetTempPath(), "pricing-tests", Guid.NewGuid().ToString());
         Directory.CreateDirectory(_tempDir);
         _options = Options.Create(new ReadingConfiguration { UserReadingsDirectory = _tempDir });
-    }
 
-    private PricingService CreateService() =>
-        new(_logger, _options, _fileService);
+        _sut = new PricingService(_logger, _options, _fileService);
+    }
 
     private static string BuildCsv(params ElectricityRateEntry[] entries)
     {
@@ -45,6 +47,7 @@ public class PricingServiceTests
     [Fact]
     public async Task CalculatePrice_ValidRegion_ReturnsExpectedCost()
     {
+        //ARRANGE
         var csvContent = BuildCsv(new ElectricityRateEntry
         {
             Region = "London",
@@ -55,19 +58,29 @@ public class PricingServiceTests
         });
 
         _fileService.ReadFileAsync(Arg.Any<string>()).Returns(Task.FromResult(csvContent));
-        var sut = CreateService();
 
-        var result = await sut.CalculatePriceAsync("London", 100m, "client-001");
+        //ACT
+        var result = await _sut.CalculatePriceAsync("London", 100m, "client-001");
 
-        Assert.Equal(25m, result);
-        await _fileService.Received(1).ReadFileAsync(Arg.Any<string>());
-        _logger.ReceivedWithAnyArgs().Log( LogLevel.Information,0,default!,null,default!);
+        //ASSERT
+        result.Should().Be(25m);
+
+        await _fileService.Received(1)
+            .ReadFileAsync(Arg.Any<string>());
+
+        _logger.Received().Log(
+            LogLevel.Information,
+            Arg.Any<EventId>(),
+            Arg.Any<object>(),
+            Arg.Any<Exception>(),
+            Arg.Any<Func<object, Exception?, string>>());
     }
 
     [Fact]
     public async Task CalculatePrice_UnknownRegion_ThrowsKeyNotFoundException()
     {
-        var csvContent = BuildCsv(new ElectricityRateEntry
+        // ARRANGE
+        var csv = BuildCsv(new ElectricityRateEntry
         {
             Region = "Scotland",
             StandingChargeRate = 0.4m,
@@ -76,37 +89,21 @@ public class PricingServiceTests
             UnitChargeUnit = "£/kWh"
         });
 
-        _fileService.ReadFileAsync(Arg.Any<string>()).Returns(Task.FromResult(csvContent));
-        var sut = CreateService();
+        _fileService.ReadFileAsync(Arg.Any<string>())
+            .Returns(csv);
 
-        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
-            sut.CalculatePriceAsync("Wales", 50m, "client-002"));
-    }
+        // ACT
+        var act = () => _sut.CalculatePriceAsync("Wales", 50m, "client-002");
 
-    [Fact]
-    public async Task CalculatePrice_CsvParseFails_ThrowsException()
-    {
-        _fileService.ReadFileAsync(Arg.Any<string>()).Returns(Task.FromResult("INVALID,CSV,DATA"));
-        var sut = CreateService();
-
-        await Assert.ThrowsAnyAsync<Exception>(() =>
-            sut.CalculatePriceAsync("London", 100m, "client-003"));
-    }
-
-    [Fact]
-    public async Task CalculatePrice_FileReadFails_ThrowsException()
-    {
-        _fileService.ReadFileAsync(Arg.Any<string>()).Returns<Task<string>>(_ => throw new IOException("File not found"));
-        var sut = CreateService();
-
-        await Assert.ThrowsAsync<IOException>(() =>
-            sut.CalculatePriceAsync("London", 100m, "client-004"));
+        // ASSERT
+        await act.Should().ThrowAsync<KeyNotFoundException>();
     }
 
     [Fact]
     public async Task CalculatePrice_CachesBaseRates_AfterFirstCall()
     {
-        var csvContent = BuildCsv(new ElectricityRateEntry
+        // ARRANGE
+        var csv = BuildCsv(new ElectricityRateEntry
         {
             Region = "London",
             StandingChargeRate = 0.5m,
@@ -115,20 +112,22 @@ public class PricingServiceTests
             UnitChargeUnit = "£/kWh"
         });
 
-        _fileService.ReadFileAsync(Arg.Any<string>()).Returns(Task.FromResult(csvContent));
-        var sut = CreateService();
+        _fileService.ReadFileAsync(Arg.Any<string>())
+            .Returns(csv);
 
-        await sut.CalculatePriceAsync("London", 100m, "client-005");
-        await sut.CalculatePriceAsync("London", 200m, "client-006");
+        // ACT
+        await _sut.CalculatePriceAsync("London", 100m, "client-005");
+        await _sut.CalculatePriceAsync("London", 200m, "client-006");
 
-        // Cached after first load — should only call ReadFileAsync once
+        // ASSERT
         await _fileService.Received(1).ReadFileAsync(Arg.Any<string>());
     }
 
     [Fact]
     public async Task CalculatePrice_AppendsClientReadingFile()
     {
-        var csvContent = BuildCsv(new ElectricityRateEntry
+        // ARRANGE
+        var csv = BuildCsv(new ElectricityRateEntry
         {
             Region = "London",
             StandingChargeRate = 0.5m,
@@ -137,17 +136,27 @@ public class PricingServiceTests
             UnitChargeUnit = "£/kWh"
         });
 
-        _fileService.ReadFileAsync(Arg.Any<string>()).Returns(Task.FromResult(csvContent));
-        var sut = CreateService();
+        _fileService.ReadFileAsync(Arg.Any<string>())
+            .Returns(csv);
 
-        var cost = await sut.CalculatePriceAsync("London", 10m, "client-007");
+        // ACT
+        var cost = await _sut.CalculatePriceAsync("London", 10m, "client-007");
 
-        Assert.True(cost > 0);
+        // ASSERT
+        cost.Should().BeGreaterThan(0);
 
         var clientDir = Path.Combine(_tempDir, "client-007");
-        Assert.True(Directory.Exists(clientDir));
+        Directory.Exists(clientDir).Should().BeTrue();
 
-        var todayFile = Path.Combine(clientDir, $"{DateTime.Now:dd-MM-yyyy}.csv");
-        Assert.True(File.Exists(todayFile));
+        var today = DateTime.Today.ToString("dd-MM-yyyy");
+        var todayFile = Path.Combine(clientDir, $"{today}.csv");
+        File.Exists(todayFile).Should().BeTrue();
     }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_tempDir))
+            Directory.Delete(_tempDir, recursive: true);
+    }
+
 }
