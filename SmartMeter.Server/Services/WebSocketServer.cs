@@ -9,6 +9,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SmartMeter.Server.Configuration;
+using SmartMeter.Server.Helpers;
 
 namespace SmartMeter.Server.Services;
 
@@ -61,9 +62,9 @@ public class WebSocketServer(
                 {
                     var messageAsString = Encoding.UTF8.GetString(buffer, 0, message.Count);
                     logger.LogInformation("Message received from {ClientID}: {Message}", clientId, messageAsString);
-
-                    if (JsonSerializer.Deserialize<ReadingRequest>(messageAsString, _jsonOptions) is not ReadingRequest
-                        payload)
+                    
+                    if (!JsonDeserializerHelper.TryDeserialize(messageAsString, _jsonOptions, out ReadingRequest? readingRequest) ||
+                        readingRequest is null)
                     {
                         logger.LogWarning("Invalid message format from {ClientAddress}", clientAddress);
                         closeStatus = WebSocketCloseStatus.InvalidPayloadData;
@@ -71,9 +72,10 @@ public class WebSocketServer(
                         break;
                     }
 
-                    var pricing = await pricingService.CalculatePriceAsync(payload.Region, payload.Usage, clientId);
+                    var pricing = await pricingService.CalculatePriceAsync(readingRequest.Region, readingRequest.Usage, clientId);
+                    
                     var responseJson =
-                        JsonSerializer.Serialize(new ReadingResponse(payload.Region, payload.Usage, pricing),
+                        JsonSerializer.Serialize(new ReadingResponse(readingRequest.Region, readingRequest.Usage, pricing),
                             _jsonOptions);
 
                     await socket.SendAsync(Encoding.UTF8.GetBytes(responseJson),
@@ -99,6 +101,15 @@ public class WebSocketServer(
         {
             logger.LogError(ex, "Error while handling WebSocket connection from {ClientAddress}", clientAddress);
 
+            if (socket is not null)
+            {
+                await socket.SendAsync(Encoding.UTF8.GetBytes(
+                    $"Error while handling request: {ex.Message}"),
+                    WebSocketMessageType.Text, 
+                    true,
+                    ct);
+            }
+            
             closeStatus = WebSocketCloseStatus.InternalServerError;
             closeDescription = "Server encountered an internal error";
         }
