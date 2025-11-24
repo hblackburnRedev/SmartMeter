@@ -12,7 +12,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartMeter.IntegrationTests", "SmartMeter.IntegrationTests\SmartMeter.IntegrationTests.csproj", "{5578B727-3854-4F40-990F-B37E112E836A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartMeter.Tests", "SmartMeter.Tests\SmartMeter.Tests.csproj", "{495CBE8B-A856-473E-BAB3-671403AF55F5}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartMeter.UnitTests", "SmartMeter.UnitTests\SmartMeter.UnitTests.csproj", "{495CBE8B-A856-473E-BAB3-671403AF55F5}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

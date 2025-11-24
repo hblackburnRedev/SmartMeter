@@ -14,27 +14,30 @@ public class Program
     
     public static async Task Main(string[] args)
     {
-        
-        var builder = Host.CreateApplicationBuilder(args);
-        
-        builder.Services.AddLogging(b =>
-        {
-            b.AddConsole();
-            b.SetMinimumLevel(LogLevel.Information);
-        });
+        var host = Host.CreateDefaultBuilder(args)
+            .ConfigureServices((context, services) =>
+            {
+                // Logging
+                services.AddLogging(b =>
+                {
+                    b.AddConsole();
+                    b.SetMinimumLevel(LogLevel.Information);
+                });
 
-        builder.Services
-            .Configure<ServerConfiguration>(builder.Configuration.GetRequiredSection("ServerConfiguration"))
-            .Configure<ReadingConfiguration>(builder.Configuration.GetRequiredSection("ReadingConfiguration"));
-        
-        builder.Services
-            .AddSingleton<IFileService, FileService>()
-            .AddSingleton<IPricingService, PricingService>();
+                // Configuration binding
+                services
+                    .Configure<ServerConfiguration>(context.Configuration.GetRequiredSection("ServerConfiguration"))
+                    .Configure<ReadingConfiguration>(context.Configuration.GetRequiredSection("ReadingConfiguration"));
 
-        builder.Services
-            .AddHostedService<WebSocketServer>();
-        
-        var host = builder.Build();
+                // Services
+                services
+                    .AddSingleton<IFileService, FileService>()
+                    .AddSingleton<IPricingService, PricingService>();
+
+                // Hosted services
+                services.AddHostedService<WebSocketServer>();
+            })
+            .Build();
         
         try
         {

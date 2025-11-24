@@ -41,13 +41,17 @@ public class TestFixture : IAsyncLifetime
 
         builder.Services.AddHostedService<WebSocketServer>();
         
-        var host = builder.Build();
+        _host = builder.Build();
 
-        await host.RunAsync();
+        await _host.StartAsync();
     }
 
-    public Task DisposeAsync()
+    public async Task DisposeAsync()
     {
-        return Task.CompletedTask;
+        if (_host is not null)
+        {
+            await _host.StopAsync();
+            _host.Dispose();
+        }
     }
 }
