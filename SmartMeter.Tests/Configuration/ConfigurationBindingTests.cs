@@ -28,7 +28,7 @@ public class ConfigurationBindingTests
             .Get<ServerConfiguration>();
 
         // ASSERT
-        Assert.NotNull(serverConfig);
+        serverConfig.Should().NotBeNull();
         serverConfig.Should().Be(new ServerConfiguration
         {
             ApiKey = "secret",
@@ -55,7 +55,7 @@ public class ConfigurationBindingTests
         var readingConfig = config.GetRequiredSection("ReadingConfiguration").Get<ReadingConfiguration>();
 
         //ASSERT
-        Assert.NotNull(readingConfig);
+        readingConfig.Should().NotBeNull();
 
         readingConfig.Should().Be(new ReadingConfiguration
         {
