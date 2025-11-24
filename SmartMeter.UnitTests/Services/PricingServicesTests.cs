@@ -6,13 +6,8 @@ using SmartMeter.Server.Configuration;
 using SmartMeter.Server.Models;
 using SmartMeter.Server.Services;
 using SmartMeter.Server.Services.Abstractions;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading.Tasks;
-using Xunit;
 
-namespace SmartMeter.Tests.Services;
+namespace SmartMeter.UnitTests.Services;
 
 public class PricingServiceTests
 {
@@ -152,11 +147,4 @@ public class PricingServiceTests
         var todayFile = Path.Combine(clientDir, $"{today}.csv");
         File.Exists(todayFile).Should().BeTrue();
     }
-
-    public void Dispose()
-    {
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
-    }
-
 }

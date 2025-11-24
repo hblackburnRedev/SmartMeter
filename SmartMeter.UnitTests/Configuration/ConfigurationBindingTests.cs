@@ -1,10 +1,8 @@
-using System.Collections.Generic;
+using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using SmartMeter.Server.Configuration;
-using Xunit;
-using FluentAssertions;
 
-namespace SmartMeter.Tests.Configuration;
+namespace SmartMeter.UnitTests.Configuration;
 public class ConfigurationBindingTests
 {
     [Fact]

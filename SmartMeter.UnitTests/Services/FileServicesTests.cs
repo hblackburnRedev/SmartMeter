@@ -3,12 +3,8 @@ using Microsoft.Extensions.Logging;
 using NSubstitute;
 using SmartMeter.Server.Services;
 using SmartMeter.Server.Services.Abstractions;
-using System;
-using System.IO;
-using System.Threading.Tasks;
-using Xunit;
 
-namespace SmartMeter.Tests.Services;
+namespace SmartMeter.UnitTests.Services;
 
 public sealed class FileServiceTests : IDisposable
 {

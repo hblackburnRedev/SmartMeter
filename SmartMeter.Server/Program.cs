@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SmartMeter.Server.Configuration;
 using SmartMeter.Server.Services;
@@ -9,49 +10,43 @@ namespace SmartMeter.Server;
 
 public class Program
 {
+    private static readonly CancellationTokenSource CancellationTokenSource = new();
+    
     public static async Task Main(string[] args)
     {
-        // Load configuration from appsettings.json
-        var builder = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+        var host = Host.CreateDefaultBuilder(args)
+            .ConfigureServices((context, services) =>
+            {
+                // Logging
+                services.AddLogging(b =>
+                {
+                    b.AddConsole();
+                    b.SetMinimumLevel(LogLevel.Information);
+                });
 
-        var config = builder.Build();
+                // Configuration binding
+                services
+                    .Configure<ServerConfiguration>(context.Configuration.GetRequiredSection("ServerConfiguration"))
+                    .Configure<ReadingConfiguration>(context.Configuration.GetRequiredSection("ReadingConfiguration"));
 
-        var services = CreateServices(config);
-        
-        var server = services.GetRequiredService<IWebSocketServer>();
+                // Services
+                services
+                    .AddSingleton<IFileService, FileService>()
+                    .AddSingleton<IPricingService, PricingService>();
+
+                // Hosted services
+                services.AddHostedService<WebSocketServer>();
+            })
+            .Build();
         
         try
         {
-            await server.StartServer();
+            await host.RunAsync(CancellationTokenSource.Token);
         }
         catch (Exception ex)
         {
             Console.WriteLine(ex.Message);
             throw;
         }
-    }
-
-    private static IServiceProvider CreateServices(IConfiguration configuration)
-    {
-        var services = new ServiceCollection();
-
-        services.AddLogging(builder =>
-        {
-            builder.AddConsole();
-            builder.SetMinimumLevel(LogLevel.Information);
-        });
-
-        services
-            .Configure<ServerConfiguration>(configuration.GetRequiredSection("ServerConfiguration"))
-            .Configure<ReadingConfiguration>(configuration.GetRequiredSection("ReadingConfiguration"));
-        
-        services
-            .AddSingleton<IWebSocketServer, WebSocketServer>()
-            .AddSingleton<IFileService, FileService>()
-            .AddSingleton<IPricingService, PricingService>();
-
-        return services.BuildServiceProvider();
     }
 }

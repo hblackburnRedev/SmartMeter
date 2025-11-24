@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.14.36310.24
+VisualStudioVersion = 17.14.36310.24 d17.14
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartMeter.Server", "SmartMeter.Server\SmartMeter.Server.csproj", "{B032D186-76F7-4516-9373-E1EB179C58D5}"
 EndProject
@@ -10,7 +10,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		compose.yaml = compose.yaml
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartMeter.Tests", "SmartMeter.Tests\SmartMeter.Tests.csproj", "{495CBE8B-A856-473E-BAB3-671403AF55F5}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartMeter.IntegrationTests", "SmartMeter.IntegrationTests\SmartMeter.IntegrationTests.csproj", "{5578B727-3854-4F40-990F-B37E112E836A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartMeter.UnitTests", "SmartMeter.UnitTests\SmartMeter.UnitTests.csproj", "{495CBE8B-A856-473E-BAB3-671403AF55F5}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -22,6 +24,10 @@ Global
 		{B032D186-76F7-4516-9373-E1EB179C58D5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B032D186-76F7-4516-9373-E1EB179C58D5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B032D186-76F7-4516-9373-E1EB179C58D5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5578B727-3854-4F40-990F-B37E112E836A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5578B727-3854-4F40-990F-B37E112E836A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5578B727-3854-4F40-990F-B37E112E836A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5578B727-3854-4F40-990F-B37E112E836A}.Release|Any CPU.Build.0 = Release|Any CPU
 		{495CBE8B-A856-473E-BAB3-671403AF55F5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{495CBE8B-A856-473E-BAB3-671403AF55F5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{495CBE8B-A856-473E-BAB3-671403AF55F5}.Release|Any CPU.ActiveCfg = Release|Any CPU
