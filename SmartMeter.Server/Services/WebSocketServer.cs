@@ -100,18 +100,9 @@ public class WebSocketServer(
         catch (Exception ex)
         {
             logger.LogError(ex, "Error while handling WebSocket connection from {ClientAddress}", clientAddress);
-
-            if (socket is not null)
-            {
-                await socket.SendAsync(Encoding.UTF8.GetBytes(
-                    $"Error while handling request: {ex.Message}"),
-                    WebSocketMessageType.Text, 
-                    true,
-                    ct);
-            }
             
             closeStatus = WebSocketCloseStatus.InternalServerError;
-            closeDescription = "Server encountered an internal error";
+            closeDescription = $"Server encountered an internal error: {ex.Message}";
         }
         finally
         {

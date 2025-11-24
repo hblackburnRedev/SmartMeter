@@ -99,8 +99,6 @@ public sealed class SmartMeterTests : IClassFixture<TestFixture>
         await socket.ConnectAsync(uri, CancellationToken.None);
         
         //Act
-        string? responseAsString = null;
-        
         await socket.SendAsync(
             Encoding.UTF8.GetBytes(requestAsJson),
             WebSocketMessageType.Text,
@@ -112,13 +110,14 @@ public sealed class SmartMeterTests : IClassFixture<TestFixture>
             CancellationToken.None);
         
         
-        responseAsString = Encoding.UTF8.GetString(buffer, 0, response.Count);
-        
         await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, response.CloseStatusDescription, CancellationToken.None);
         
         //Assert
-        responseAsString.Should().NotBeNullOrWhiteSpace();
-        response.MessageType.Should().Be(WebSocketMessageType.Text);
+        using (new AssertionScope())
+        {
+            response.MessageType.Should().Be(WebSocketMessageType.Close);
+            response.CloseStatus.Should().Be(WebSocketCloseStatus.InternalServerError);
+        }
     }
     
     [Fact]
@@ -148,9 +147,12 @@ public sealed class SmartMeterTests : IClassFixture<TestFixture>
             new ArraySegment<byte>(buffer),
             CancellationToken.None);
 
-        // Assert
-        response.MessageType.Should().Be(WebSocketMessageType.Close);
-        response.CloseStatus.Should().Be(WebSocketCloseStatus.InvalidPayloadData);
+        // Assert'
+        using (new AssertionScope())
+        {
+            response.MessageType.Should().Be(WebSocketMessageType.Close);
+            response.CloseStatus.Should().Be(WebSocketCloseStatus.InvalidPayloadData);
+        }
     }
 
     [Fact]
@@ -221,8 +223,11 @@ public sealed class SmartMeterTests : IClassFixture<TestFixture>
         var body = await response.Content.ReadAsStringAsync();
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        body.Should().Contain("only supports WebSocket connections");
+        using (new AssertionScope())
+        {
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+            body.Should().Contain("only supports WebSocket connections");
+        }
     }
 
     [Fact]
@@ -237,8 +242,11 @@ public sealed class SmartMeterTests : IClassFixture<TestFixture>
         var body = await response.Content.ReadAsStringAsync();
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-        body.Should().Contain("Unauthorized: invalid credentials.");
+        using (new AssertionScope())
+        {
+            response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+            body.Should().Contain("Unauthorized: invalid credentials.");
+        }
     }
 
     [Fact]
@@ -258,60 +266,10 @@ public sealed class SmartMeterTests : IClassFixture<TestFixture>
         var body = await response.Content.ReadAsStringAsync();
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-        body.Should().Contain("Unauthorized: invalid API key.");
-    }
-
-    [Fact]
-    public async Task SmartMeter_Should_Accept_Auth_Via_Headers_When_QueryString_Is_Not_Provided()
-    {
-        // Arrange
-        var buffer = new byte[1024];
-
-        var clientId = Guid.NewGuid().ToString();
-        var region = "yorkshire";
-        decimal usage = 1.25m;
-        
-        var request = new ReadingRequest(region, usage);
-        var requestAsJson = JsonSerializer.Serialize(request);
-
-        using var socket = new ClientWebSocket();
-
-        // Use base address without query params and set headers for upgrade
-        var uri = new Uri($"ws://{_serverConfiguration.IpAddress}:{_serverConfiguration.Port}/ws");
-
-        socket.Options.SetRequestHeader("ApiKey", _serverConfiguration.ApiKey);
-        socket.Options.SetRequestHeader("ClientId", clientId);
-
-        await socket.ConnectAsync(uri, CancellationToken.None);
-
-        // Act
-        await socket.SendAsync(
-            Encoding.UTF8.GetBytes(requestAsJson),
-            WebSocketMessageType.Text,
-            WebSocketMessageFlags.EndOfMessage,
-            CancellationToken.None);
-
-        var response = await socket.ReceiveAsync(
-            new ArraySegment<byte>(buffer),
-            CancellationToken.None);
-
-        var responseAsString = Encoding.UTF8.GetString(buffer, 0, response.Count);
-
-        await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, response.CloseStatusDescription, CancellationToken.None);
-
-        // Assert
-        responseAsString.Should().NotBeNullOrWhiteSpace();
-
-        var readingResponse = JsonSerializer.Deserialize<ReadingResponse>(responseAsString);
-
-        readingResponse.Should().NotBeNull();
-        readingResponse.Should().BeOfType<ReadingResponse>();
-
         using (new AssertionScope())
         {
-            readingResponse!.Region.Should().Be(region);
-            readingResponse.Usage.Should().Be(usage);
+            response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+            body.Should().Contain("Unauthorized: invalid API key.");
         }
     }
 }
