@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Globalization;
 using SmartMeter.Server.Services.Abstractions;
 using SmartMeter.Server.Contracts;
 using System.Net;
@@ -37,7 +36,7 @@ public class WebSocketServer(
         WebSocket? socket = null;
         try
         {
-            HttpListenerWebSocketContext webSocketContext = await context.AcceptWebSocketAsync(null);
+            var webSocketContext = await context.AcceptWebSocketAsync(null);
             socket = webSocketContext.WebSocket;
             logger.LogDebug("WebSocket accepted for {ClientAddress}", clientAddress);
 
@@ -70,9 +69,13 @@ public class WebSocketServer(
 
                     var pricing = await pricingService.CalculatePriceAsync(payload.Region, payload.Usage, clientId);
                     
+                    var response = new ReadingResponse(payload.Region, payload.Usage, pricing);
+                    
+                    var responseAsJson = JsonSerializer.Serialize(response, _jsonOptions);
+
                     // Send calculated price back to client
                     await socket.SendAsync(
-                        Encoding.UTF8.GetBytes(pricing.ToString(CultureInfo.InvariantCulture)), 
+                        Encoding.UTF8.GetBytes(responseAsJson), 
                         WebSocketMessageType.Text, 
                         true, 
                         ct);
@@ -87,6 +90,15 @@ public class WebSocketServer(
         catch (Exception ex)
         {
             logger.LogError(ex, "Error while handling WebSocket connection from {ClientAddress}", clientAddress);
+
+            if (socket is not null)
+            {
+                await socket.SendAsync(
+                    "An error has occured"u8.ToArray(), 
+                    WebSocketMessageType.Text, 
+                    true, 
+                    CancellationToken.None);
+            }
         }
         finally
         {
