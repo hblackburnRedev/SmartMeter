@@ -1,7 +1,12 @@
 using System.Text.Json.Serialization;
 
-namespace SmartMeter.Server.Contracts;
+public sealed record NewClientRequest
+{
+    [JsonPropertyName("name")]
+    [JsonRequired]
+    public required string ClientName { get; init; }
 
-public sealed record NewClientRequest( 
-    [property: JsonPropertyName("name")]  string ClientName,
-    [property: JsonPropertyName("address")]  string Address);
+    [JsonPropertyName("address")]
+    [JsonRequired]
+    public required string Address { get; init; }
+}

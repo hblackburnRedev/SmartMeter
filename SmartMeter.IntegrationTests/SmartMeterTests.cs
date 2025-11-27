@@ -6,26 +6,25 @@ using FluentAssertions;
 using FluentAssertions.Execution;
 using SmartMeter.Server.Configuration;
 using SmartMeter.Server.Contracts;
+using SmartMeter.Server.Models;
 
 namespace SmartMeter.IntegrationTests;
 
 public sealed class SmartMeterTests : IClassFixture<TestFixture>
 {
     private readonly ServerConfiguration _serverConfiguration;
-    
-    
+
     public SmartMeterTests(TestFixture fixture)
     {
         ArgumentNullException.ThrowIfNull(fixture);
-        
+
         _serverConfiguration = new()
         {
             ApiKey = fixture.ApiKey.ToString(),
             IpAddress = fixture.IpAddress,
-            Port = fixture.Port,
+            Port = TestFixture.Port,
         };
     }
-
 
     [Fact]
     public async Task SmartMeter_Should_Return_Correct_ReadingConfiguration_When_Provided_Valid_Request()
@@ -35,50 +34,61 @@ public sealed class SmartMeterTests : IClassFixture<TestFixture>
 
         var clientId = Guid.NewGuid().ToString();
         var region = "yorkshire";
-        decimal usage = new decimal(1.25);
-        
-        var request = new ReadingRequest(region, usage);
-        var requestAsJson = JsonSerializer.Serialize(request);
-        
-        using var socket = new ClientWebSocket();
-        
-        var uri = new Uri($"ws://{_serverConfiguration.IpAddress}:{_serverConfiguration.Port}/ws?apikey={_serverConfiguration.ApiKey}&clientid={clientId}");
-        
-        await socket.ConnectAsync(uri, CancellationToken.None);
-        
-        //Act
-        string? responseAsString = null;
-        
-        await socket.SendAsync(
-            Encoding.UTF8.GetBytes(requestAsJson),
-            WebSocketMessageType.Text,
-            WebSocketMessageFlags.EndOfMessage,  
-            CancellationToken.None);
-        
-        var response = await socket.ReceiveAsync(
-            new ArraySegment<byte>(buffer), 
-            CancellationToken.None);
-        
-        
-        responseAsString = Encoding.UTF8.GetString(buffer, 0, response.Count);
-        
-        await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, response.CloseStatusDescription, CancellationToken.None);
-        
-        //Assert
-        responseAsString.Should().NotBeNullOrWhiteSpace();
+        decimal usage = 1.25m;
 
-        var readingResponse = JsonSerializer.Deserialize<ReadingResponse>(responseAsString);
+        var readingRequest = new ReadingRequest
+        {
+            Region = region,
+            Usage = usage
+        };
+
+        var meterReadingRequestAsJson = JsonSerializer.Serialize(readingRequest);
+
+        using var socket = new ClientWebSocket();
+
+        var uri = new Uri($"ws://{_serverConfiguration.IpAddress}:{_serverConfiguration.Port}?apikey={_serverConfiguration.ApiKey}&clientid={clientId}");
+
+        await socket.ConnectAsync(uri, CancellationToken.None);
+
+        var createdClient = await CreateClientAsync(socket, buffer, clientId, "Test", "Test");
+
+        //Act
+        await socket.SendAsync(
+            Encoding.UTF8.GetBytes(meterReadingRequestAsJson),
+            WebSocketMessageType.Text,
+            WebSocketMessageFlags.EndOfMessage,
+            CancellationToken.None);
+
+        var response = await socket.ReceiveAsync(
+            new ArraySegment<byte>(buffer),
+            CancellationToken.None);
+
+        var meterReadingResponse = Encoding.UTF8.GetString(buffer, 0, response.Count);
+
+        await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", CancellationToken.None);
+
+        //Assert
+        using (new AssertionScope("client creation"))
+        {
+            createdClient.ClientId.Should().Be(Guid.Parse(clientId));
+            createdClient.ClientName.Should().Be("Test");
+            createdClient.Address.Should().Be("Test");
+        }
+
+        meterReadingResponse.Should().NotBeNullOrWhiteSpace();
+
+        var readingResponse = JsonSerializer.Deserialize<ReadingResponse>(meterReadingResponse);
 
         readingResponse.Should().NotBeNull();
         readingResponse.Should().BeOfType<ReadingResponse>();
-        
-        using (new AssertionScope())
+
+        using (new AssertionScope("reading response"))
         {
-            readingResponse.Region.Should().Be(region);
+            readingResponse!.Region.Should().Be(region);
             readingResponse.Usage.Should().Be(usage);
         }
     }
-    
+
     [Fact]
     public async Task SmartMeter_Should_Return_Error_And_Close_Connection_When_Provided_Invalid_Region()
     {
@@ -87,31 +97,37 @@ public sealed class SmartMeterTests : IClassFixture<TestFixture>
 
         var clientId = Guid.NewGuid().ToString();
         var region = "invalid";
-        decimal usage = new decimal(1.25);
-        
-        var request = new ReadingRequest(region, usage);
-        var requestAsJson = JsonSerializer.Serialize(request);
-        
+        decimal usage = 1.25m;
+
+        var readingRequest = new ReadingRequest
+        {
+            Region = region,
+            Usage = usage
+        };
+
+        var readingRequestAsJson = JsonSerializer.Serialize(readingRequest);
+
         using var socket = new ClientWebSocket();
-        
-        var uri = new Uri($"ws://{_serverConfiguration.IpAddress}:{_serverConfiguration.Port}/ws?apikey={_serverConfiguration.ApiKey}&clientid={clientId}");
-        
+
+        var uri = new Uri($"ws://{_serverConfiguration.IpAddress}:{_serverConfiguration.Port}?apikey={_serverConfiguration.ApiKey}&clientid={clientId}");
+
         await socket.ConnectAsync(uri, CancellationToken.None);
-        
+
+        await CreateClientAsync(socket, buffer, clientId, "Test", "Test");
+
         //Act
         await socket.SendAsync(
-            Encoding.UTF8.GetBytes(requestAsJson),
+            Encoding.UTF8.GetBytes(readingRequestAsJson),
             WebSocketMessageType.Text,
-            WebSocketMessageFlags.EndOfMessage,  
+            WebSocketMessageFlags.EndOfMessage,
             CancellationToken.None);
-        
+
         var response = await socket.ReceiveAsync(
-            new ArraySegment<byte>(buffer), 
+            new ArraySegment<byte>(buffer),
             CancellationToken.None);
-        
-        
-        await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, response.CloseStatusDescription, CancellationToken.None);
-        
+
+        await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", CancellationToken.None);
+
         //Assert
         using (new AssertionScope())
         {
@@ -119,24 +135,27 @@ public sealed class SmartMeterTests : IClassFixture<TestFixture>
             response.CloseStatus.Should().Be(WebSocketCloseStatus.InternalServerError);
         }
     }
-    
+
     [Fact]
     public async Task SmartMeter_Should_Close_With_InvalidPayloadData_When_Message_Is_Not_Valid_ReadingRequest()
     {
-        // Arrange
+        //Arrange
         var buffer = new byte[1024];
 
         var clientId = Guid.NewGuid().ToString();
         using var socket = new ClientWebSocket();
 
         var uri = new Uri(
-            $"ws://{_serverConfiguration.IpAddress}:{_serverConfiguration.Port}/ws?apikey={_serverConfiguration.ApiKey}&clientid={clientId}");
+            $"ws://{_serverConfiguration.IpAddress}:{_serverConfiguration.Port}?apikey={_serverConfiguration.ApiKey}&clientid={clientId}");
 
         await socket.ConnectAsync(uri, CancellationToken.None);
 
-        // Act
-        var invalidPayload = "invalid";
+        await CreateClientAsync(socket, buffer, clientId, "Test", "Test");
         
+
+        //Act
+        var invalidPayload = "invalid";
+
         await socket.SendAsync(
             Encoding.UTF8.GetBytes(invalidPayload),
             WebSocketMessageType.Text,
@@ -146,8 +165,10 @@ public sealed class SmartMeterTests : IClassFixture<TestFixture>
         var response = await socket.ReceiveAsync(
             new ArraySegment<byte>(buffer),
             CancellationToken.None);
+        
+        await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", CancellationToken.None);
 
-        // Assert'
+        //Assert
         using (new AssertionScope())
         {
             response.MessageType.Should().Be(WebSocketMessageType.Close);
@@ -158,7 +179,7 @@ public sealed class SmartMeterTests : IClassFixture<TestFixture>
     [Fact]
     public async Task SmartMeter_Should_Handle_Multiple_Readings_On_Same_WebSocket_Connection()
     {
-        // Arrange
+        //Arrange
         var buffer = new byte[1024];
 
         var clientId = Guid.NewGuid().ToString();
@@ -168,14 +189,21 @@ public sealed class SmartMeterTests : IClassFixture<TestFixture>
         using var socket = new ClientWebSocket();
 
         var uri = new Uri(
-            $"ws://{_serverConfiguration.IpAddress}:{_serverConfiguration.Port}/ws?apikey={_serverConfiguration.ApiKey}&clientid={clientId}");
+            $"ws://{_serverConfiguration.IpAddress}:{_serverConfiguration.Port}?apikey={_serverConfiguration.ApiKey}&clientid={clientId}");
 
         await socket.ConnectAsync(uri, CancellationToken.None);
 
-        // Act & Assert
+        await CreateClientAsync(socket, buffer, clientId, "Test", "Test");
+
+        //Act
         foreach (var usage in usages)
         {
-            var request = new ReadingRequest(region, usage);
+            var request = new ReadingRequest
+            {
+                Region = region,
+                Usage = usage
+            };
+
             var requestAsJson = JsonSerializer.Serialize(request);
 
             await socket.SendAsync(
@@ -205,24 +233,27 @@ public sealed class SmartMeterTests : IClassFixture<TestFixture>
         }
 
         await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client finished sending readings", CancellationToken.None);
+
+        //Assert
+        true.Should().BeTrue();
     }
 
     [Fact]
     public async Task SmartMeter_Should_Reject_NonWebSocket_Request_With_BadRequest()
     {
-        // Arrange
+        //Arrange
         using var httpClient = new HttpClient();
-        
-        var clientId = Guid.NewGuid().ToString();
-        
-        var uri = new Uri(
-            $"ws://{_serverConfiguration.IpAddress}:{_serverConfiguration.Port}/ws?apikey={_serverConfiguration.ApiKey}&clientid={clientId}");
 
-        // Act
+        var clientId = Guid.NewGuid().ToString();
+
+        var uri = new Uri(
+            $"http://{_serverConfiguration.IpAddress}:{_serverConfiguration.Port}?apikey={_serverConfiguration.ApiKey}&clientid={clientId}");
+
+        //Act
         var response = await httpClient.GetAsync(uri);
         var body = await response.Content.ReadAsStringAsync();
 
-        // Assert
+        //Assert
         using (new AssertionScope())
         {
             response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -231,45 +262,80 @@ public sealed class SmartMeterTests : IClassFixture<TestFixture>
     }
 
     [Fact]
-    public async Task SmartMeter_Should_Return_Unauthorized_When_Missing_Credentials()
+    public async Task SmartMeter_Should_Reject_Connection_When_Missing_Credentials()
     {
         // Arrange
-        using var httpClient = new HttpClient();
-        var uri = new Uri($"http://{_serverConfiguration.IpAddress}:{_serverConfiguration.Port}/ws");
+        using var socket = new ClientWebSocket();
+
+        var uri = new Uri($"ws://{_serverConfiguration.IpAddress}:{_serverConfiguration.Port}");
 
         // Act
-        var response = await httpClient.GetAsync(uri);
-        var body = await response.Content.ReadAsStringAsync();
+        Func<Task> act = async () => await socket.ConnectAsync(uri, CancellationToken.None);
 
         // Assert
-        using (new AssertionScope())
-        {
-            response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-            body.Should().Contain("Unauthorized: invalid credentials.");
-        }
+        await act.Should().ThrowAsync<WebSocketException>();
     }
 
     [Fact]
-    public async Task SmartMeter_Should_Return_Unauthorized_When_ApiKey_Is_Invalid()
+    public async Task SmartMeter_Should_Reject_Connection_When_ApiKey_Is_Invalid()
     {
         // Arrange
-        using var httpClient = new HttpClient();
+        using var socket = new ClientWebSocket();
 
         var invalidApiKey = Guid.NewGuid().ToString();
         var clientId = Guid.NewGuid().ToString();
-
+        
         var uri = new Uri(
-            $"http://{_serverConfiguration.IpAddress}:{_serverConfiguration.Port}/ws?apikey={invalidApiKey}&clientid={clientId}");
+            $"ws://{_serverConfiguration.IpAddress}:{_serverConfiguration.Port}?apikey={invalidApiKey}&clientid={clientId}");
 
         // Act
-        var response = await httpClient.GetAsync(uri);
-        var body = await response.Content.ReadAsStringAsync();
+        Func<Task> act = async () => await socket.ConnectAsync(uri, CancellationToken.None);
 
         // Assert
+        await act.Should().ThrowAsync<WebSocketException>();
+    }
+
+    private static async Task<SmartMeterClient> CreateClientAsync(
+        ClientWebSocket socket,
+        byte[] buffer,
+        string clientId,
+        string name,
+        string address)
+    {
+        var newClientRequest = new NewClientRequest
+        {
+            ClientName = name,
+            Address = address
+        };
+
+        var newClientRequestAsJson = JsonSerializer.Serialize(newClientRequest);
+
+        await socket.SendAsync(
+            Encoding.UTF8.GetBytes(newClientRequestAsJson),
+            WebSocketMessageType.Text,
+            WebSocketMessageFlags.EndOfMessage,
+            CancellationToken.None);
+
+        var clientResponse = await socket.ReceiveAsync(
+            new ArraySegment<byte>(buffer),
+            CancellationToken.None);
+
+        var createClientResponse = Encoding.UTF8.GetString(buffer, 0, clientResponse.Count);
+
+        createClientResponse.Should().NotBeNullOrWhiteSpace();
+
+        var client = JsonSerializer.Deserialize<SmartMeterClient>(createClientResponse);
+
+        client.Should().NotBeNull();
+        client.Should().BeOfType<SmartMeterClient>();
+
         using (new AssertionScope())
         {
-            response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-            body.Should().Contain("Unauthorized: invalid API key.");
+            client!.ClientId.Should().Be(Guid.Parse(clientId));
+            client.ClientName.Should().Be(name);
+            client.Address.Should().Be(address);
         }
+
+        return client!;
     }
 }

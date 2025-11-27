@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -27,7 +28,8 @@ public class WebSocketServer(
     
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true, 
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
     };
     
     private async Task ProcessWebSocketRequest(HttpListenerContext context, string clientId, CancellationToken ct)
@@ -102,11 +104,13 @@ public class WebSocketServer(
                         }
 
                         var pricing = await pricingService.CalculatePriceAsync(readingRequest.Region, readingRequest.Usage, clientId);
-                    
-                         response =
-                            JsonSerializer.Serialize(new ReadingResponse(readingRequest.Region, readingRequest.Usage, pricing),
-                                _jsonOptions);
 
+                        response = JsonSerializer.Serialize(new ReadingResponse 
+                        {   
+                            Region =  readingRequest.Region,
+                            Usage = readingRequest.Usage,
+                            Price = pricing,
+                        });
                     }
                     
                     await socket.SendAsync(
