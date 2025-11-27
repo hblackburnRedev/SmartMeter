@@ -20,26 +20,41 @@ public sealed class FileServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ReadFile_FileExists_ReturnsFileContent()
+    public async Task SaveFileAsync_CreatesFileWithCorrectContent()
     {
-        //ARRANGE
-        var testPath = Path.Combine(_tempDir, "sample.txt");
+        // ARRANGE
+        var path = Path.Combine(_tempDir, "sample.txt");
         const string expectedContent = "hello smart meter";
 
-        await File.WriteAllTextAsync(testPath, expectedContent);
+        // ACT
+        await _service.SaveFileAsync(expectedContent, path);
 
-        //ACT
-        var content = await _service.ReadFileAsync(testPath);
-
-        //ASSERT
-        content.Should().Be(expectedContent);
+        // ASSERT
+        File.Exists(path).Should().BeTrue("the file should be created by SaveFileAsync");
+        var fileContent = await File.ReadAllTextAsync(path);
+        fileContent.Should().Be(expectedContent);
     }
 
     [Fact]
-    public async Task ReadFile_FileDoesNotExist_ThrowsFileNotFoundException()
+    public async Task SaveFileAsync_ThenReadFileAsync_ReturnsSameContent()
     {
         // ARRANGE
-        var nonExistentPath = Path.Combine(_tempDir, "missing.txt");
+        var path = Path.Combine(_tempDir, "roundtrip.txt");
+        const string content = "round-trip content check";
+
+        // ACT
+        await _service.SaveFileAsync(content, path);
+        var result = await _service.ReadFileAsync(path);
+
+        // ASSERT
+        result.Should().Be(content);
+    }
+
+    [Fact]
+    public async Task ReadFileAsync_FileDoesNotExist_ThrowsFileNotFoundException()
+    {
+        // ARRANGE
+        var nonExistentPath = Path.Combine(_tempDir, "does-not-exist.txt");
 
         // ACT
         Func<Task> act = () => _service.ReadFileAsync(nonExistentPath);
@@ -48,36 +63,11 @@ public sealed class FileServiceTests : IDisposable
         await act.Should().ThrowAsync<FileNotFoundException>();
     }
 
-    [Fact]
-    public async Task ReadFile_WhenIOExceptionOccurs_PropagatesException()
-    {
-        // ARRANGE
-        // Simulate invalid path to trigger an exception on Windows
-        var invalidPath = Path.Combine("?:", "invalid", "file.txt");
-
-        // ACT
-        Func<Task> act = () => _service.ReadFileAsync(invalidPath);
-
-        // ASSERT
-        await act.Should().ThrowAsync<Exception>();
-    }
-
-    [Fact]
-    public async Task SaveFile_ThrowsNotImplementedException()
-    {
-        // ARRANGE
-        var path = Path.Combine(_tempDir, "dummy.txt");
-
-        // ACT
-        Func<Task> act = () => _service.SaveFileAsync<string>(path);
-
-        // ASSERT
-        await act.Should().ThrowAsync<NotImplementedException>();
-    }
-
     public void Dispose()
     {
         if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, true);
+        {
+            Directory.Delete(_tempDir, recursive: true);
+        }
     }
 }

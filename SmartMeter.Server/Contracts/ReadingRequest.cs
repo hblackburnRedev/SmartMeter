@@ -2,7 +2,13 @@
 
 namespace SmartMeter.Server.Contracts;
 
-public record ReadingRequest(
-    [property: JsonPropertyName("region")]  string Region,
-    [property: JsonPropertyName("usage")]  decimal Usage );
+public sealed record ReadingRequest
+{
+    [JsonPropertyName("region")]
+    [JsonRequired]
+    public required string Region { get; init; }
 
+    [JsonPropertyName("usage")]
+    [JsonRequired]
+    public required decimal Usage { get; init; }
+}

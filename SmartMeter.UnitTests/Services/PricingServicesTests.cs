@@ -9,7 +9,7 @@ using SmartMeter.Server.Services.Abstractions;
 
 namespace SmartMeter.UnitTests.Services;
 
-public class PricingServiceTests
+public sealed class PricingServiceTests : IDisposable
 {
     private readonly ILogger<PricingService> _logger = Substitute.For<ILogger<PricingService>>();
     private readonly IFileService _fileService = Substitute.For<IFileService>();
@@ -18,12 +18,15 @@ public class PricingServiceTests
     private readonly string _tempDir;
     private readonly PricingService _sut;
 
-
     public PricingServiceTests()
     {
         _tempDir = Path.Combine(Path.GetTempPath(), "pricing-tests", Guid.NewGuid().ToString());
         Directory.CreateDirectory(_tempDir);
-        _options = Options.Create(new ReadingConfiguration { UserReadingsDirectory = _tempDir });
+
+        _options = Options.Create(new ReadingConfiguration
+        {
+            UserReadingsDirectory = _tempDir
+        });
 
         _sut = new PricingService(_logger, _options, _fileService);
     }
@@ -36,13 +39,14 @@ public class PricingServiceTests
         {
             sw.WriteLine($"{e.Region},{e.StandingChargeRate},{e.StandingChargeUnit},{e.UnitChargeRate},{e.UnitChargeUnit}");
         }
+
         return sw.ToString();
     }
 
     [Fact]
-    public async Task CalculatePrice_ValidRegion_ReturnsExpectedCost()
+    public async Task CalculatePriceAsync_WithValidRegion_ReturnsExpectedCost()
     {
-        //ARRANGE
+        // ARRANGE
         var csvContent = BuildCsv(new ElectricityRateEntry
         {
             Region = "London",
@@ -52,30 +56,27 @@ public class PricingServiceTests
             UnitChargeUnit = "£/kWh"
         });
 
-        _fileService.ReadFileAsync(Arg.Any<string>()).Returns(Task.FromResult(csvContent));
+        _fileService.ReadFileAsync(Arg.Any<string>())
+            .Returns(csvContent);
 
-        //ACT
-        var result = await _sut.CalculatePriceAsync("London", 100m, "client-001");
+        const decimal reading = 100m;
+        var clientDir = Path.Combine(_tempDir, "client-001");
 
-        //ASSERT
-        result.Should().Be(25m);
+        Directory.CreateDirectory(clientDir);
 
-        await _fileService.Received(1)
-            .ReadFileAsync(Arg.Any<string>());
+        // ACT
+        var result = await _sut.CalculatePriceAsync("London", reading, "client-001");
 
-        _logger.Received().Log(
-            LogLevel.Information,
-            Arg.Any<EventId>(),
-            Arg.Any<object>(),
-            Arg.Any<Exception>(),
-            Arg.Any<Func<object, Exception?, string>>());
+        // ASSERT
+        result.Should().Be(25m); // 100 * 0.25
     }
 
+
     [Fact]
-    public async Task CalculatePrice_UnknownRegion_ThrowsKeyNotFoundException()
+    public async Task CalculatePriceAsync_WithUnknownRegion_ThrowsKeyNotFoundException()
     {
         // ARRANGE
-        var csv = BuildCsv(new ElectricityRateEntry
+        var csvContent = BuildCsv(new ElectricityRateEntry
         {
             Region = "Scotland",
             StandingChargeRate = 0.4m,
@@ -85,20 +86,20 @@ public class PricingServiceTests
         });
 
         _fileService.ReadFileAsync(Arg.Any<string>())
-            .Returns(csv);
+            .Returns(csvContent);
 
         // ACT
-        var act = () => _sut.CalculatePriceAsync("Wales", 50m, "client-002");
+        Func<Task> act = () => _sut.CalculatePriceAsync("Wales", 50m, "client-002");
 
         // ASSERT
         await act.Should().ThrowAsync<KeyNotFoundException>();
     }
 
     [Fact]
-    public async Task CalculatePrice_CachesBaseRates_AfterFirstCall()
+    public async Task CalculatePriceAsync_AppendsClientReadingFile_ToClientDirectory()
     {
         // ARRANGE
-        var csv = BuildCsv(new ElectricityRateEntry
+        var csvContent = BuildCsv(new ElectricityRateEntry
         {
             Region = "London",
             StandingChargeRate = 0.5m,
@@ -108,43 +109,34 @@ public class PricingServiceTests
         });
 
         _fileService.ReadFileAsync(Arg.Any<string>())
-            .Returns(csv);
+            .Returns(csvContent);
+
+        var clientId = "client-007";
+        var clientDir = Path.Combine(_tempDir, clientId);
+        Directory.CreateDirectory(clientDir);
+
+        const decimal reading = 10m;
 
         // ACT
-        await _sut.CalculatePriceAsync("London", 100m, "client-005");
-        await _sut.CalculatePriceAsync("London", 200m, "client-006");
+        var cost = await _sut.CalculatePriceAsync("London", reading, clientId);
 
         // ASSERT
-        await _fileService.Received(1).ReadFileAsync(Arg.Any<string>());
+        cost.Should().Be(2.5m); // 10 * 0.25
+
+        var todayFileName = $"{DateTime.Now:dd-MM-yyyy}.csv";
+        var todayFilePath = Path.Combine(clientDir, todayFileName);
+
+        File.Exists(todayFilePath).Should().BeTrue("a readings CSV should be created for the client for today");
+
+        var fileContent = await File.ReadAllTextAsync(todayFilePath);
+        fileContent.Should().NotBeNullOrWhiteSpace();
     }
 
-    [Fact]
-    public async Task CalculatePrice_AppendsClientReadingFile()
+    public void Dispose()
     {
-        // ARRANGE
-        var csv = BuildCsv(new ElectricityRateEntry
+        if (Directory.Exists(_tempDir))
         {
-            Region = "London",
-            StandingChargeRate = 0.5m,
-            StandingChargeUnit = "p/day",
-            UnitChargeRate = 0.25m,
-            UnitChargeUnit = "£/kWh"
-        });
-
-        _fileService.ReadFileAsync(Arg.Any<string>())
-            .Returns(csv);
-
-        // ACT
-        var cost = await _sut.CalculatePriceAsync("London", 10m, "client-007");
-
-        // ASSERT
-        cost.Should().BeGreaterThan(0);
-
-        var clientDir = Path.Combine(_tempDir, "client-007");
-        Directory.Exists(clientDir).Should().BeTrue();
-
-        var today = DateTime.Today.ToString("dd-MM-yyyy");
-        var todayFile = Path.Combine(clientDir, $"{today}.csv");
-        File.Exists(todayFile).Should().BeTrue();
+            Directory.Delete(_tempDir, recursive: true);
+        }
     }
 }

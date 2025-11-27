@@ -47,13 +47,7 @@ public class PricingService(ILogger<PricingService> logger, IOptions<ReadingConf
     private async Task SaveClientReadingAsync(decimal reading, decimal price, decimal cost, string clientId)
     {
         var clientReadingsPath = Path.Combine(config.Value.UserReadingsDirectory, clientId);
-
-        if (!Directory.Exists(clientReadingsPath))
-        {
-            Directory.CreateDirectory(clientReadingsPath);
-            logger.LogInformation("Created client directory: {Dir}", clientReadingsPath);
-        }
-
+        
         var currentReadingFileForClient = Path.Combine(
             clientReadingsPath,
             $"{DateTime.Now:dd-MM-yyyy}.csv"

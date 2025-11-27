@@ -10,9 +10,9 @@ namespace SmartMeter.IntegrationTests;
 public class TestFixture : IAsyncLifetime
 {
     public Guid ApiKey = Guid.NewGuid();
-    public int Port = 8080;
+    public const int Port = 8080;
     public string IpAddress = "127.0.0.1";
-    public DirectoryInfo ReadingsDirectory = Directory.CreateTempSubdirectory();
+    private readonly DirectoryInfo _readingsDirectory = Directory.CreateTempSubdirectory();
     
     private IHost? _host;
 
@@ -26,7 +26,7 @@ public class TestFixture : IAsyncLifetime
             ["ServerConfiguration:Port"] = Port.ToString(),
             ["ServerConfiguration:ApiKey"] = ApiKey.ToString(),
             ["ServerConfiguration:IpAddress"] = IpAddress,
-            ["ReadingConfiguration:UserReadingsDirectory"] = ReadingsDirectory.FullName,
+            ["ReadingConfiguration:UserReadingsDirectory"] = _readingsDirectory.FullName,
         });
 
         builder.Services.AddLogging();
@@ -37,6 +37,7 @@ public class TestFixture : IAsyncLifetime
 
         builder.Services
             .AddSingleton<IFileService, FileService>()
+            .AddSingleton<IClientService, ClientService>()
             .AddSingleton<IPricingService, PricingService>();
 
         builder.Services.AddHostedService<WebSocketServer>();
@@ -51,7 +52,7 @@ public class TestFixture : IAsyncLifetime
         if (_host is not null)
         {
             await _host.StopAsync();
-            _host.Dispose();
+            _readingsDirectory.Delete(true);
         }
     }
 }

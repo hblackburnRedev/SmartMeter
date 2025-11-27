@@ -7,25 +7,19 @@ public sealed class FileService(ILogger<IFileService> logger) : IFileService
 {
     public async Task<string> ReadFileAsync(string path)
     {
-        try
+        if (!File.Exists(path))
         {
-            if (!File.Exists(path))
-                throw new FileNotFoundException(path);
-
-            var fileContent = await File.ReadAllTextAsync(path);
-
-            return fileContent;
+            logger.LogError("File {Path} does not exist", path);
+            throw new FileNotFoundException(path);
         }
-        catch (Exception e)
-        {
-            Console.WriteLine(e);
-            throw;
-        }
-        
+
+        var fileContent = await File.ReadAllTextAsync(path);
+
+        return fileContent;
     }
 
-    public Task<T> SaveFileAsync<T>(string path)
+    public Task SaveFileAsync(string content, string path)
     {
-        throw new NotImplementedException();
+        return File.WriteAllTextAsync(path, content);
     }
 }
