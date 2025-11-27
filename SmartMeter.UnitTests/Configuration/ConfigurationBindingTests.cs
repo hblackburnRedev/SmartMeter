@@ -13,7 +13,8 @@ public class ConfigurationBindingTests
         {
             ["ServerConfiguration:ApiKey"] = "secret",
             ["ServerConfiguration:IpAddress"] = "127.0.0.1",
-            ["ServerConfiguration:Port"] = "9000"
+            ["ServerConfiguration:Port"] = "9000",
+            ["ServerConfiguration:EnableGridAlerts"] = "true",
         };
 
         var config = new ConfigurationBuilder()
@@ -31,7 +32,8 @@ public class ConfigurationBindingTests
         {
             ApiKey = "secret",
             IpAddress = "127.0.0.1",
-            Port = 9000
+            Port = 9000,
+            EnableGridAlerts = true,
         });
     }
 
