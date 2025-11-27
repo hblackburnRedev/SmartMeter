@@ -11,7 +11,7 @@ public static class JsonDeserializerHelper
             result = JsonSerializer.Deserialize<T>(json, options);
             return result is not null;
         }
-        catch (JsonException ex)
+        catch (JsonException)
         {
             result = default;
             return false;
