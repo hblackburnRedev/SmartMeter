@@ -32,7 +32,8 @@ public class Program
                 // Services
                 services
                     .AddSingleton<IFileService, FileService>()
-                    .AddSingleton<IPricingService, PricingService>();
+                    .AddSingleton<IPricingService, PricingService>()
+                    .AddSingleton<IClientService, ClientService>();
 
                 // Hosted services
                 services.AddHostedService<WebSocketServer>();

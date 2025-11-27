@@ -16,6 +16,7 @@ namespace SmartMeter.Server.Services;
 public class WebSocketServer(
     ILogger<WebSocketServer> logger,
     IOptions<ServerConfiguration> config,
+    IClientService clientService,
     IPricingService pricingService) 
     : BackgroundService
 {
@@ -24,14 +25,14 @@ public class WebSocketServer(
     private const string ClientIdHeaderName = "ClientId";
     private const string ApiKeyHeaderName = "ApiKey";
     
-    private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
+    private readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
     };
     
     private async Task ProcessWebSocketRequest(HttpListenerContext context, string clientId, CancellationToken ct)
     {
-        string? clientAddress = context.Request.RemoteEndPoint?.Address.ToString();
+        var clientAddress = context.Request.RemoteEndPoint.Address.ToString();
         logger.LogInformation("Incoming WebSocket connection from {ClientAddress}", clientAddress);
 
         WebSocket? socket = null;
@@ -52,34 +53,67 @@ public class WebSocketServer(
                 "Client {ClientID} authenticated successfully from {ClientAddress} with session {SessionKey}",
                 clientId, clientAddress, sessionKey);
 
-            byte[] buffer = new byte[1024];
+            var buffer = new byte[1024];
 
+            var client = await clientService.GetSmartMeterClientAsync(Guid.Parse(clientId));
+            
             while (socket.State == WebSocketState.Open)
             {
+                var newClient = client is null;
+
                 var message = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
 
                 if (message.MessageType == WebSocketMessageType.Text)
                 {
                     var messageAsString = Encoding.UTF8.GetString(buffer, 0, message.Count);
                     logger.LogInformation("Message received from {ClientID}: {Message}", clientId, messageAsString);
+
+                    string response;
                     
-                    if (!JsonDeserializerHelper.TryDeserialize(messageAsString, _jsonOptions, out ReadingRequest? readingRequest) ||
-                        readingRequest is null)
+                    if (newClient)
                     {
-                        logger.LogWarning("Invalid message format from {ClientAddress}", clientAddress);
-                        closeStatus = WebSocketCloseStatus.InvalidPayloadData;
-                        closeDescription = "Invalid message format";
-                        break;
+                        if (!JsonDeserializerHelper.TryDeserialize(messageAsString, _jsonOptions, out NewClientRequest? newClientRequest) ||
+                            newClientRequest is null)
+                        {
+                            logger.LogWarning("Invalid message format from {ClientAddress}", clientAddress);
+                            closeStatus = WebSocketCloseStatus.InvalidPayloadData;
+                            closeDescription = "Invalid message format";
+                            break;
+                        }
+                        
+                        client = await clientService.AddSmartMeterClientAsync(
+                            Guid.Parse(clientId),
+                            newClientRequest.ClientName,
+                            newClientRequest.Address);
+
+                        response =
+                            JsonSerializer.Serialize(client,
+                                _jsonOptions);
                     }
+                    else
+                    {
+                        if (!JsonDeserializerHelper.TryDeserialize(messageAsString, _jsonOptions, out ReadingRequest? readingRequest) ||
+                            readingRequest is null)
+                        {
+                            logger.LogWarning("Invalid message format from {ClientAddress}", clientAddress);
+                            closeStatus = WebSocketCloseStatus.InvalidPayloadData;
+                            closeDescription = "Invalid message format";
+                            break;
+                        }
 
-                    var pricing = await pricingService.CalculatePriceAsync(readingRequest.Region, readingRequest.Usage, clientId);
+                        var pricing = await pricingService.CalculatePriceAsync(readingRequest.Region, readingRequest.Usage, clientId);
                     
-                    var responseJson =
-                        JsonSerializer.Serialize(new ReadingResponse(readingRequest.Region, readingRequest.Usage, pricing),
-                            _jsonOptions);
+                         response =
+                            JsonSerializer.Serialize(new ReadingResponse(readingRequest.Region, readingRequest.Usage, pricing),
+                                _jsonOptions);
 
-                    await socket.SendAsync(Encoding.UTF8.GetBytes(responseJson),
-                        WebSocketMessageType.Text, true, ct);
+                    }
+                    
+                    await socket.SendAsync(
+                        Encoding.UTF8.GetBytes(response), 
+                        WebSocketMessageType.Text,
+                        true,
+                        ct);
                 }
                 else if (message.MessageType == WebSocketMessageType.Close)
                 {
@@ -152,41 +186,44 @@ public class WebSocketServer(
                 
                 var apiKey = context.Request.QueryString["apiKey"]
                              ?? context.Request.Headers[ApiKeyHeaderName];
-
-                if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(clientId))
-                {
-                    context.Response.StatusCode = 401;
-                    byte[] msg = Encoding.UTF8.GetBytes("Unauthorized: invalid credentials.");
-                    await context.Response.OutputStream.WriteAsync(msg, stoppingToken);
-                    context.Response.Close();
-
-                    logger.LogWarning("Unauthorized connection attempt - missing credentials");
-                }
-                else if (apiKey != config.Value.ApiKey)
-                {
-                    // Validate API key matches configuration
-                    context.Response.StatusCode = 401;
-                    byte[] msg = Encoding.UTF8.GetBytes("Unauthorized: invalid API key.");
-                    await context.Response.OutputStream.WriteAsync(msg, stoppingToken);
-                    context.Response.Close();
-
-                    logger.LogWarning("Unauthorized connection attempt - invalid API key from client {ClientId}",
-                        clientId);
-                }
-                else if (context.Request.IsWebSocketRequest)
-                {
-                    await ProcessWebSocketRequest(context, clientId, stoppingToken);
-                }
-                else
+                
+                if (!context.Request.IsWebSocketRequest)
                 {
                     logger.LogWarning("Rejected non-WebSocket request from {RemoteIP}",
                         context.Request.RemoteEndPoint?.Address);
 
                     context.Response.StatusCode = 400;
-                    byte[] msg = Encoding.UTF8.GetBytes("This server only supports WebSocket connections.");
+                    var msg = "This server only supports WebSocket connections."u8.ToArray();
                     await context.Response.OutputStream.WriteAsync(msg, stoppingToken);
                     context.Response.Close();
+
+                    return;
                 }
+                else if (string.IsNullOrWhiteSpace(apiKey)|| string.IsNullOrWhiteSpace(clientId))
+                {
+                    context.Response.StatusCode = 401;
+                    var msg = "Unauthorized: invalid credentials."u8.ToArray();
+                    await context.Response.OutputStream.WriteAsync(msg, stoppingToken);
+                    context.Response.Close();
+
+                    logger.LogWarning("Unauthorized connection attempt - missing credentials");
+
+                    return;
+                }
+                else if (apiKey != config.Value.ApiKey)
+                {
+                    // Validate API key matches configuration
+                    context.Response.StatusCode = 401;
+                    var msg = "Unauthorized: invalid API key."u8.ToArray();
+                    await context.Response.OutputStream.WriteAsync(msg, stoppingToken);
+                    context.Response.Close();
+
+                    logger.LogWarning("Unauthorized connection attempt - invalid API key");
+
+                    return;
+                }
+                
+                await ProcessWebSocketRequest(context, clientId, stoppingToken);
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
