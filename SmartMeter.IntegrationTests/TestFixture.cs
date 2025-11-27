@@ -11,7 +11,7 @@ public class TestFixture : IAsyncLifetime
 {
     public Guid ApiKey = Guid.NewGuid();
     public const int Port = 8080;
-    public string IpAddress = "127.0.0.1";
+    public readonly string IpAddress = "127.0.0.1";
     private readonly DirectoryInfo _readingsDirectory = Directory.CreateTempSubdirectory();
     
     private IHost? _host;
@@ -26,6 +26,7 @@ public class TestFixture : IAsyncLifetime
             ["ServerConfiguration:Port"] = Port.ToString(),
             ["ServerConfiguration:ApiKey"] = ApiKey.ToString(),
             ["ServerConfiguration:IpAddress"] = IpAddress,
+            ["ServerConfiguration:EnableGridAlerts"] = "false",
             ["ReadingConfiguration:UserReadingsDirectory"] = _readingsDirectory.FullName,
         });
 

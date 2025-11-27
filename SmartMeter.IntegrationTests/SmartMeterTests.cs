@@ -23,6 +23,7 @@ public sealed class SmartMeterTests : IClassFixture<TestFixture>
             ApiKey = fixture.ApiKey.ToString(),
             IpAddress = fixture.IpAddress,
             Port = TestFixture.Port,
+            EnableGridAlerts = false,
         };
     }
 

@@ -9,4 +9,6 @@ public sealed record ServerConfiguration
     public required string IpAddress { get; init; }
 
     public required int Port { get; init; }
+    
+    public required bool EnableGridAlerts { get; init; }
 }

@@ -1,6 +1,4 @@
 using System.Collections.Concurrent;
-using SmartMeter.Server.Services.Abstractions;
-using SmartMeter.Server.Contracts;
 using System.Net;
 using System.Net.WebSockets;
 using System.Text;
@@ -10,7 +8,9 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SmartMeter.Server.Configuration;
+using SmartMeter.Server.Contracts;
 using SmartMeter.Server.Helpers;
+using SmartMeter.Server.Services.Abstractions;
 
 namespace SmartMeter.Server.Services;
 
@@ -21,7 +21,7 @@ public class WebSocketServer(
     IPricingService pricingService) 
     : BackgroundService
 {
-    private readonly ConcurrentDictionary<string, string> _activeSessions = new();
+    private readonly ConcurrentDictionary<string, WebSocket> _sockets = new();
     
     private const string ClientIdHeaderName = "ClientId";
     private const string ApiKeyHeaderName = "ApiKey";
@@ -31,8 +31,70 @@ public class WebSocketServer(
         PropertyNameCaseInsensitive = true, 
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
     };
+
+
+    private async Task BroadcastGridAlertAsync(
+        ElectricityGridStatusResponse alert,
+        CancellationToken ct = default)
+    {
+        
+        var json = JsonSerializer.Serialize(alert, _jsonOptions);
+        
+        foreach (var socket in _sockets.Values)
+        {
+            if (socket.State != WebSocketState.Open)
+                continue;
+
+            try
+            {
+                await socket.SendAsync(
+                    Encoding.UTF8.GetBytes(json),
+                    WebSocketMessageType.Text,
+                    true,
+                    ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to send alert to a client");
+            }
+        }
+    }
     
-    private async Task ProcessWebSocketRequest(HttpListenerContext context, string clientId, CancellationToken ct)
+    private async Task SimulateGridAsync(CancellationToken ct = default)
+    {
+        var random = new Random();
+
+        while (!ct.IsCancellationRequested)
+        {
+            var delayUntilNextOutage = TimeSpan.FromSeconds(random.Next(10, 30));
+            await Task.Delay(delayUntilNextOutage, ct);
+
+            logger.LogWarning("Simulated: electricity grid DOWN");
+            await BroadcastGridAlertAsync(
+                new ElectricityGridStatusResponse
+                {
+                    Status = "down"
+                },
+                ct);
+
+            var outageDuration = TimeSpan.FromSeconds(random.Next(5, 10));
+            await Task.Delay(outageDuration, ct);
+
+            logger.LogInformation("Simulated: electricity grid UP");
+            await BroadcastGridAlertAsync(
+                new ElectricityGridStatusResponse
+                {
+                    Status = "Up"
+                },
+                ct);        
+        }
+    }
+
+
+    private async Task ProcessWebSocketRequest(
+        HttpListenerContext context,
+        string clientId,
+        CancellationToken ct =  default)
     {
         var clientAddress = context.Request.RemoteEndPoint.Address.ToString();
         logger.LogInformation("Incoming WebSocket connection from {ClientAddress}", clientAddress);
@@ -49,7 +111,7 @@ public class WebSocketServer(
             logger.LogDebug("WebSocket accepted for {ClientAddress}", clientAddress);
 
             var sessionKey = Guid.NewGuid().ToString();
-            _activeSessions[sessionKey] = clientId;
+            _sockets[sessionKey] =  socket;
 
             logger.LogInformation(
                 "Client {ClientID} authenticated successfully from {ClientAddress} with session {SessionKey}",
@@ -146,6 +208,14 @@ public class WebSocketServer(
         {
             if (socket is not null)
             {
+                var sessionToRemove = _sockets
+                    .FirstOrDefault(kvp => kvp.Value == socket).Key;
+
+                if (sessionToRemove is not null)
+                {
+                    _sockets.TryRemove(sessionToRemove, out _);
+                }
+                
                 try
                 {
                     // Only close if still open
@@ -180,9 +250,16 @@ public class WebSocketServer(
             logger.LogInformation("WebSocket server started on {Address}:{Port}", 
                 config.Value.IpAddress, config.Value.Port);
 
+
+            if (config.Value.EnableGridAlerts)
+            {
+                _ = SimulateGridAsync(stoppingToken);
+
+            }
+
             while (!stoppingToken.IsCancellationRequested)
             {
-                HttpListenerContext context = await listener.GetContextAsync().WaitAsync(stoppingToken);
+                var context = await listener.GetContextAsync().WaitAsync(stoppingToken);
 
                 // Support both query parameters (for browser WebSocket) and headers
                 var clientId = context.Request.QueryString["clientId"]
@@ -201,9 +278,10 @@ public class WebSocketServer(
                     await context.Response.OutputStream.WriteAsync(msg, stoppingToken);
                     context.Response.Close();
 
-                    return;
+                    continue;
                 }
-                else if (string.IsNullOrWhiteSpace(apiKey)|| string.IsNullOrWhiteSpace(clientId))
+
+                if (string.IsNullOrWhiteSpace(apiKey)|| string.IsNullOrWhiteSpace(clientId))
                 {
                     context.Response.StatusCode = 401;
                     var msg = "Unauthorized: invalid credentials."u8.ToArray();
@@ -212,9 +290,10 @@ public class WebSocketServer(
 
                     logger.LogWarning("Unauthorized connection attempt - missing credentials");
 
-                    return;
+                    continue;
                 }
-                else if (apiKey != config.Value.ApiKey)
+
+                if (apiKey != config.Value.ApiKey)
                 {
                     // Validate API key matches configuration
                     context.Response.StatusCode = 401;
@@ -224,9 +303,9 @@ public class WebSocketServer(
 
                     logger.LogWarning("Unauthorized connection attempt - invalid API key");
 
-                    return;
+                    continue;
                 }
-                
+
                 await ProcessWebSocketRequest(context, clientId, stoppingToken);
             }
         }
