@@ -219,12 +219,20 @@ class WebSocketService {
      */
     handleGridAlert(data) {
         const status = data.status.toLowerCase();
-        const message = status === 'down'
-            ? '⚠️ Grid Alert: Electricity supply disrupted'
-            : '✓ Grid Restored: Electricity supply normal';
+
+        let iconPath, message;
+        if (status === 'down') {
+            iconPath = '../assets/icons/warning.svg';
+            message = 'Grid Alert: Electricity supply disrupted';
+        } else {
+            iconPath = '../assets/icons/check.svg';
+            message = 'Grid Restored: Electricity supply normal';
+        }
+
+        const alertMessage = `<img src="${iconPath}" alt="${status}" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 6px;">${message}`;
 
         logger.warn(`Grid status: ${status}`);
-        storageService.setAlert(message);
+        storageService.setAlert(alertMessage);
     }
 
     /**

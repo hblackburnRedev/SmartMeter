@@ -354,12 +354,12 @@ class Application {
 
     /**
      * Show alert message
-     * @param {string} message - Alert message
+     * @param {string} message - Alert message (may contain HTML)
      */
     showAlert(message) {
         if (!this.elements.alert || !this.elements.alertText) return;
 
-        this.elements.alertText.textContent = message;
+        this.elements.alertText.innerHTML = message;
         this.elements.alert.classList.add('show');
 
         setTimeout(() => {
