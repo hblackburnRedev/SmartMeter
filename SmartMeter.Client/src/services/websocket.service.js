@@ -6,7 +6,7 @@
 import { createLogger } from '../utils/logger.js';
 import { CONFIG } from '../../config/config.js';
 import { storageService } from './storage.service.js';
-import { parseDecimal, sleep } from '../utils/helpers.js';
+import { sleep } from '../utils/helpers.js';
 
 const logger = createLogger('WebSocketService');
 
@@ -20,8 +20,22 @@ class WebSocketService {
         this.isConnecting = false;
         this.shouldReconnect = true;
         this.reconnectAttempt = 0;
+        this.isRegistered = false;
+        this.clientName = null;
+        this.clientAddress = null;
 
         logger.info('WebSocket service initialized');
+    }
+
+    /**
+     * Set client registration details (for new clients)
+     * @param {string} name - Client name
+     * @param {string} address - Client address
+     */
+    setClientDetails(name, address) {
+        this.clientName = name;
+        this.clientAddress = address;
+        logger.info(`Client details set: ${name}, ${address}`);
     }
 
     /**
@@ -49,20 +63,21 @@ class WebSocketService {
         storageService.setConnectionStatus(false);
 
         try {
-            // Browser WebSocket doesn't support custom headers, so we use query params
             const url = new URL(CONFIG.SERVER.URL);
             url.searchParams.append('clientId', meterId);
             url.searchParams.append('apiKey', CONFIG.AUTH.API_KEY);
 
             logger.info(`Connecting to ${CONFIG.SERVER.URL}`);
-            logger.debug(`Using ClientId: ${meterId}`);
-            logger.debug(`Full URL: ${url.toString()}`);
 
             this.ws = new WebSocket(url.toString());
 
             this.setupEventHandlers();
 
             await this.waitForConnection();
+
+            if (!this.isRegistered) {
+                await this.sendRegistration();
+            }
 
         } catch (error) {
             logger.error('Connection failed', error);
@@ -122,6 +137,31 @@ class WebSocketService {
     }
 
     /**
+     * Send registration message to server for new clients
+     * @returns {Promise<void>}
+     */
+    async sendRegistration() {
+        if (!this.clientName || !this.clientAddress) {
+            logger.error('Cannot register - client details not set');
+            throw new Error('Client details not initialized');
+        }
+
+        try {
+            const message = {
+                name: this.clientName,
+                address: this.clientAddress
+            };
+
+            logger.info(`Sending registration: ${this.clientName}`);
+            await this.send(message);
+
+        } catch (error) {
+            logger.error('Failed to send registration', error);
+            throw error;
+        }
+    }
+
+    /**
      * Handle incoming WebSocket messages
      * @param {MessageEvent} event - WebSocket message event
      */
@@ -129,20 +169,70 @@ class WebSocketService {
         try {
             logger.debug('Message received', event.data);
 
-            const billAmount = parseDecimal(event.data, 0);
+            const data = JSON.parse(event.data);
 
-            if (billAmount > 0) {
-                logger.info(`Bill update received: £${billAmount.toFixed(2)}`);
-                storageService.updateBill(billAmount);
-                storageService.clearError();
+            if (data.status) {
+                this.handleGridAlert(data);
+            } else if (data.clientId && data.name) {
+                this.handleRegistrationResponse(data);
+            } else if (data.total !== undefined) {
+                this.handleBillUpdate(data);
             } else {
-                logger.warn('Received invalid bill amount', event.data);
+                logger.warn('Unknown message format', data);
             }
 
         } catch (error) {
             logger.error('Error handling message', error);
             storageService.setError(`Message handling error: ${error.message}`);
         }
+    }
+
+    /**
+     * Handle registration confirmation from server
+     * @param {Object} data - Registration response data
+     */
+    handleRegistrationResponse(data) {
+        logger.info(`Registration confirmed: ${data.clientName}`);
+        this.isRegistered = true;
+        storageService.clearError();
+    }
+
+    /**
+     * Handle bill update from server
+     * @param {Object} data - Bill response data with total
+     */
+    handleBillUpdate(data) {
+        const billAmount = data.total;
+
+        if (typeof billAmount === 'number' && billAmount >= 0) {
+            logger.info(`Bill update received: £${billAmount.toFixed(2)}`);
+            storageService.updateBill(billAmount);
+            storageService.clearError();
+        } else {
+            logger.warn('Received invalid bill amount', data);
+        }
+    }
+
+    /**
+     * Handle grid alert broadcast from server
+     * @param {Object} data - Grid status data
+     */
+    handleGridAlert(data) {
+        const status = data.status.toLowerCase();
+
+        let iconPath, message;
+        if (status === 'down') {
+            iconPath = '../assets/icons/warning.svg';
+            message = 'Grid Alert: Electricity supply disrupted';
+        } else {
+            iconPath = '../assets/icons/check.svg';
+            message = 'Grid Restored: Electricity supply normal';
+        }
+
+        const alertMessage = `<img src="${iconPath}" alt="${status}" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 6px;">${message}`;
+
+        logger.warn(`Grid status: ${status}`);
+        storageService.setAlert(alertMessage);
     }
 
     /**
@@ -153,6 +243,7 @@ class WebSocketService {
         logger.info(`WebSocket closed: Code=${event.code}, Reason=${event.reason || 'None'}`);
 
         storageService.setConnectionStatus(false);
+        this.isRegistered = false;
 
         if (event.code === 1000) {
             logger.info('Normal closure - not reconnecting');
@@ -172,7 +263,8 @@ class WebSocketService {
     }
 
     /**
-     * Handle reconnection logic
+     * Handle reconnection logic with exponential backoff
+     * @returns {Promise<void>}
      */
     async handleReconnection() {
         if (!this.shouldReconnect) {
@@ -214,13 +306,19 @@ class WebSocketService {
             return;
         }
 
+        if (!this.isRegistered) {
+            logger.warn('Cannot send reading - not registered');
+            storageService.setError('Cannot send reading - registration pending');
+            return;
+        }
+
         try {
             const message = {
-                Region: storageService.getRegion(),
-                Usage: reading
+                region: storageService.getRegion(),
+                usage: reading
             };
 
-            logger.info(`Sending reading: ${reading} kWh for region ${message.Region}`);
+            logger.info(`Sending reading: ${reading} kWh for region ${message.region}`);
             await this.send(message);
 
         } catch (error) {
@@ -278,6 +376,7 @@ class WebSocketService {
         }
 
         storageService.setConnectionStatus(false);
+        this.isRegistered = false;
         logger.info('Disconnected');
     }
 

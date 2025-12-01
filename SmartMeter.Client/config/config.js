@@ -11,8 +11,7 @@ export const CONFIG = {
     },
 
     AUTH: {
-        API_KEY: '2B798FB1-F4EA-426C-B8B9-19DD0A946A4F',
-        CLIENT_ID_PREFIX: 'METER_'
+        API_KEY: '2B798FB1-F4EA-426C-B8B9-19DD0A946A4F'
     },
 
     REGIONS: [
@@ -29,12 +28,10 @@ export const CONFIG = {
         'East Midlands',
         'Midlands',
         'Southern Western',
-        'South Wales',
-        'Great Britain average'
+        'South Wales'
     ],
 
     METER: {
-        DEFAULT_REGION: 'London',
         MIN_READING_INCREMENT: 0.1,
         MAX_READING_INCREMENT: 0.5,
         MIN_INTERVAL: 15000,
@@ -49,28 +46,26 @@ export const CONFIG = {
     }
 };
 
-/**
- * Generate a unique client/meter ID
- * @returns {string} Unique meter identifier
- */
 export function generateMeterId() {
-    const randomId = Math.random().toString(36).substr(2, 9).toUpperCase();
-    return `${CONFIG.AUTH.CLIENT_ID_PREFIX}${randomId}`;
+    return crypto.randomUUID();
 }
 
-/**
- * Get a random UK region from the available regions
- * @returns {string} Random region name
- */
+export function generateClientName() {
+    const randomId = Math.random().toString(36).substr(2, 6).toUpperCase();
+    return `Smart Meter ${randomId}`;
+}
+
+export function generateClientAddress(region) {
+    const streetNumber = Math.floor(Math.random() * 999) + 1;
+    const streets = ['High Street', 'Main Road', 'Church Lane', 'Station Road', 'Park Avenue'];
+    const street = streets[Math.floor(Math.random() * streets.length)];
+    return `${streetNumber} ${street}, ${region}`;
+}
+
 export function getRandomRegion() {
-    const regions = CONFIG.REGIONS.filter(r => r !== 'Great Britain average');
-    return regions[Math.floor(Math.random() * regions.length)];
+    return CONFIG.REGIONS[Math.floor(Math.random() * CONFIG.REGIONS.length)];
 }
 
-/**
- * Validate configuration on startup
- * @throws {Error} If configuration is invalid
- */
 export function validateConfig() {
     if (!CONFIG.SERVER.URL) {
         throw new Error('Server URL is not configured');

@@ -3,9 +3,9 @@
  * Coordinates services and updates the DOM
  */
 
-import { CONFIG, generateMeterId, getRandomRegion, validateConfig } from '../../config/config.js';
+import { CONFIG, generateMeterId, generateClientName, generateClientAddress, getRandomRegion, validateConfig } from '../../config/config.js';
 import { createLogger } from '../utils/logger.js';
-import { formatCurrency, formatReading } from '../utils/helpers.js';
+import { formatCurrency } from '../utils/helpers.js';
 import { storageService } from '../services/storage.service.js';
 import { meterService } from '../services/meter.service.js';
 import { websocketService } from '../services/websocket.service.js';
@@ -14,12 +14,17 @@ const logger = createLogger('Renderer');
 
 /**
  * Application class - main controller
+ * Manages application lifecycle, services, and UI updates
  */
 class Application {
     constructor() {
         this.meterId = null;
         this.region = null;
+        this.clientName = null;
+        this.clientAddress = null;
         this.initialized = false;
+        this.sessionStartTime = null;
+        this.sessionTimer = null;
 
         this.elements = {
             status: null,
@@ -29,12 +34,18 @@ class Application {
             errorText: null,
             alert: null,
             alertText: null,
-            meterId: null
+            meterId: null,
+            region: null,
+            clientName: null,
+            readingsSent: null,
+            sessionTime: null,
+            lastUpdate: null
         };
     }
 
     /**
      * Initialize the application
+     * Sets up client details, services, and connections
      */
     async init() {
         try {
@@ -43,13 +54,20 @@ class Application {
             validateConfig();
 
             this.meterId = generateMeterId();
+            this.region = getRandomRegion();
+            this.clientName = generateClientName();
+            this.clientAddress = generateClientAddress(this.region);
 
             logger.info(`Meter ID: ${this.meterId}`);
             logger.info(`Region: ${this.region}`);
+            logger.info(`Name: ${this.clientName}`);
+            logger.info(`Address: ${this.clientAddress}`);
 
             this.initializeDOMElements();
 
             storageService.initialize(this.meterId, this.region);
+
+            websocketService.setClientDetails(this.clientName, this.clientAddress);
 
             this.subscribeToEvents();
 
@@ -58,6 +76,8 @@ class Application {
             await this.connectToServer();
 
             this.startMeterService();
+
+            this.startSessionTimer();
 
             this.initialized = true;
             logger.info('Application initialized successfully');
@@ -81,7 +101,11 @@ class Application {
             alert: document.getElementById('alert'),
             alertText: document.getElementById('alert-text'),
             meterId: document.getElementById('meter-id'),
-            gaugeProgress: document.getElementById('gauge-progress')
+            region: document.getElementById('region'),
+            clientName: document.getElementById('client-name'),
+            readingsSent: document.getElementById('readings-sent'),
+            sessionTime: document.getElementById('session-time'),
+            lastUpdate: document.getElementById('last-update')
         };
 
         for (const [key, element] of Object.entries(this.elements)) {
@@ -90,18 +114,17 @@ class Application {
             }
         }
 
-        this.gaugeCircumference = 2 * Math.PI * 85;
-        this.maxReading = 10;
-
         logger.debug('DOM elements initialized');
     }
 
     /**
-     * Subscribe to storage service events
+     * Subscribe to storage service events for UI updates
      */
     subscribeToEvents() {
         storageService.subscribe('reading', (reading) => {
             this.updateReading(reading);
+            this.updateStats();
+            this.updateLastUpdate();
         });
 
         storageService.subscribe('bill', (bill) => {
@@ -139,7 +162,7 @@ class Application {
     }
 
     /**
-     * Start the meter service
+     * Start the meter service for autonomous reading generation
      */
     startMeterService() {
         logger.info('Starting meter service...');
@@ -156,15 +179,29 @@ class Application {
     }
 
     /**
-     * Update the entire UI
+     * Start session timer to track uptime
+     */
+    startSessionTimer() {
+        this.sessionStartTime = Date.now();
+
+        this.sessionTimer = setInterval(() => {
+            this.updateSessionTime();
+        }, 1000);
+    }
+
+    /**
+     * Update all UI elements with current state
      */
     updateUI() {
         const state = storageService.getState();
 
         this.updateMeterId(state.meterId);
+        this.updateRegion(this.region);
+        this.updateClientName(this.clientName);
         this.updateReading(state.currentReading);
         this.updateBill(state.currentBill);
         this.updateConnectionStatus(state.isConnected);
+        this.updateStats();
     }
 
     /**
@@ -177,14 +214,32 @@ class Application {
         }
     }
 
+    /**
+     * Update region display
+     * @param {string} region - UK region
+     */
+    updateRegion(region) {
+        if (this.elements.region) {
+            this.elements.region.textContent = region || '-';
+        }
+    }
 
     /**
-     * Update reading display and animate gauge
+     * Update client name display
+     * @param {string} name - Client name
+     */
+    updateClientName(name) {
+        if (this.elements.clientName) {
+            this.elements.clientName.textContent = name || '-';
+        }
+    }
+
+    /**
+     * Update reading display with animation
      * @param {number} reading - Current reading in kWh
      */
     updateReading(reading) {
         if (this.elements.reading) {
-
             this.elements.reading.textContent = reading.toFixed(3);
 
             this.elements.reading.classList.add('updating');
@@ -192,30 +247,12 @@ class Application {
                 this.elements.reading.classList.remove('updating');
             }, 300);
 
-            this.updateGauge(reading);
-
             logger.debug(`UI updated: Reading = ${reading} kWh`);
         }
     }
 
     /**
-     * Update the circular gauge animation
-     * @param {number} reading - Current reading in kWh
-     */
-    updateGauge(reading) {
-        if (!this.elements.gaugeProgress) return;
-
-        const percentage = Math.min((reading / this.maxReading) * 100, 100);
-
-        const offset = this.gaugeCircumference - (percentage / 100) * this.gaugeCircumference;
-
-        this.elements.gaugeProgress.style.strokeDashoffset = offset;
-
-        logger.debug(`Gauge updated: ${percentage.toFixed(1)}%`);
-    }
-
-    /**
-     * Update bill display
+     * Update bill display with animation
      * @param {number} bill - Current bill amount
      */
     updateBill(bill) {
@@ -226,11 +263,50 @@ class Application {
             setTimeout(() => {
                 this.elements.bill.classList.remove('updating');
             }, 300);
-            
+
             logger.debug(`UI updated: Bill = £${bill.toFixed(2)}`);
         }
     }
-    
+
+    /**
+     * Update statistics display (readings sent)
+     */
+    updateStats() {
+        const stats = storageService.getStatistics();
+
+        if (this.elements.readingsSent) {
+            this.elements.readingsSent.textContent = stats.totalReadingsSent;
+        }
+    }
+
+    /**
+     * Update session time display
+     */
+    updateSessionTime() {
+        if (!this.sessionStartTime || !this.elements.sessionTime) return;
+
+        const elapsed = Math.floor((Date.now() - this.sessionStartTime) / 1000);
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = elapsed % 60;
+
+        this.elements.sessionTime.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    /**
+     * Update last update timestamp
+     */
+    updateLastUpdate() {
+        if (this.elements.lastUpdate) {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('en-GB', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            this.elements.lastUpdate.textContent = timeString;
+        }
+    }
+
     /**
      * Update connection status display
      * @param {boolean} isConnected - Connection status
@@ -278,12 +354,12 @@ class Application {
 
     /**
      * Show alert message
-     * @param {string} message - Alert message
+     * @param {string} message - Alert message (may contain HTML)
      */
     showAlert(message) {
         if (!this.elements.alert || !this.elements.alertText) return;
 
-        this.elements.alertText.textContent = message;
+        this.elements.alertText.innerHTML = message;
         this.elements.alert.classList.add('show');
 
         setTimeout(() => {
@@ -307,6 +383,10 @@ class Application {
      */
     cleanup() {
         logger.info('Cleaning up application...');
+
+        if (this.sessionTimer) {
+            clearInterval(this.sessionTimer);
+        }
 
         meterService.stop();
 
