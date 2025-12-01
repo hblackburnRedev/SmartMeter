@@ -306,7 +306,7 @@ public class WebSocketServer(
                     continue;
                 }
 
-                _ = Task.Run(async () => await ProcessWebSocketRequest(context, clientId, stoppingToken), stoppingToken);
+                _ = ProcessWebSocketRequest(context, clientId, stoppingToken);
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
