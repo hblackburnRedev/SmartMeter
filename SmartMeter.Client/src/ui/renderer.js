@@ -1,4 +1,9 @@
-﻿import { CONFIG, generateMeterId, generateClientName, generateClientAddress, getRandomRegion, validateConfig } from '../../config/config.js';
+﻿/**
+ * Renderer - UI Controller for Smart Meter Client
+ * Coordinates services and updates the DOM
+ */
+
+import { CONFIG, generateMeterId, generateClientName, generateClientAddress, getRandomRegion, validateConfig } from '../../config/config.js';
 import { createLogger } from '../utils/logger.js';
 import { formatCurrency } from '../utils/helpers.js';
 import { storageService } from '../services/storage.service.js';
@@ -7,6 +12,10 @@ import { websocketService } from '../services/websocket.service.js';
 
 const logger = createLogger('Renderer');
 
+/**
+ * Application class - main controller
+ * Manages application lifecycle, services, and UI updates
+ */
 class Application {
     constructor() {
         this.meterId = null;
@@ -34,6 +43,10 @@ class Application {
         };
     }
 
+    /**
+     * Initialize the application
+     * Sets up client details, services, and connections
+     */
     async init() {
         try {
             logger.info('Initializing Smart Meter Client');
@@ -75,6 +88,9 @@ class Application {
         }
     }
 
+    /**
+     * Initialize DOM element references
+     */
     initializeDOMElements() {
         this.elements = {
             status: document.getElementById('status'),
@@ -101,6 +117,9 @@ class Application {
         logger.debug('DOM elements initialized');
     }
 
+    /**
+     * Subscribe to storage service events for UI updates
+     */
     subscribeToEvents() {
         storageService.subscribe('reading', (reading) => {
             this.updateReading(reading);
@@ -127,6 +146,9 @@ class Application {
         logger.debug('Event subscriptions established');
     }
 
+    /**
+     * Connect to WebSocket server
+     */
     async connectToServer() {
         try {
             logger.info('Connecting to server...');
@@ -139,6 +161,9 @@ class Application {
         }
     }
 
+    /**
+     * Start the meter service for autonomous reading generation
+     */
     startMeterService() {
         logger.info('Starting meter service...');
 
@@ -153,6 +178,9 @@ class Application {
         logger.info('Meter service started');
     }
 
+    /**
+     * Start session timer to track uptime
+     */
     startSessionTimer() {
         this.sessionStartTime = Date.now();
 
@@ -161,6 +189,9 @@ class Application {
         }, 1000);
     }
 
+    /**
+     * Update all UI elements with current state
+     */
     updateUI() {
         const state = storageService.getState();
 
@@ -173,24 +204,40 @@ class Application {
         this.updateStats();
     }
 
+    /**
+     * Update meter ID display
+     * @param {string} meterId - Meter ID
+     */
     updateMeterId(meterId) {
         if (this.elements.meterId) {
             this.elements.meterId.textContent = meterId || 'Initializing...';
         }
     }
 
+    /**
+     * Update region display
+     * @param {string} region - UK region
+     */
     updateRegion(region) {
         if (this.elements.region) {
             this.elements.region.textContent = region || '-';
         }
     }
 
+    /**
+     * Update client name display
+     * @param {string} name - Client name
+     */
     updateClientName(name) {
         if (this.elements.clientName) {
             this.elements.clientName.textContent = name || '-';
         }
     }
 
+    /**
+     * Update reading display with animation
+     * @param {number} reading - Current reading in kWh
+     */
     updateReading(reading) {
         if (this.elements.reading) {
             this.elements.reading.textContent = reading.toFixed(3);
@@ -204,6 +251,10 @@ class Application {
         }
     }
 
+    /**
+     * Update bill display with animation
+     * @param {number} bill - Current bill amount
+     */
     updateBill(bill) {
         if (this.elements.bill) {
             this.elements.bill.textContent = formatCurrency(bill);
@@ -217,6 +268,9 @@ class Application {
         }
     }
 
+    /**
+     * Update statistics display (readings sent)
+     */
     updateStats() {
         const stats = storageService.getStatistics();
 
@@ -225,6 +279,9 @@ class Application {
         }
     }
 
+    /**
+     * Update session time display
+     */
     updateSessionTime() {
         if (!this.sessionStartTime || !this.elements.sessionTime) return;
 
@@ -235,6 +292,9 @@ class Application {
         this.elements.sessionTime.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
 
+    /**
+     * Update last update timestamp
+     */
     updateLastUpdate() {
         if (this.elements.lastUpdate) {
             const now = new Date();
@@ -247,6 +307,10 @@ class Application {
         }
     }
 
+    /**
+     * Update connection status display
+     * @param {boolean} isConnected - Connection status
+     */
     updateConnectionStatus(isConnected) {
         if (!this.elements.status) return;
 
@@ -266,6 +330,10 @@ class Application {
         }
     }
 
+    /**
+     * Show error message
+     * @param {string} message - Error message
+     */
     showError(message) {
         if (!this.elements.error || !this.elements.errorText) return;
 
@@ -275,12 +343,19 @@ class Application {
         logger.debug('Error displayed in UI');
     }
 
+    /**
+     * Hide error message
+     */
     hideError() {
         if (this.elements.error) {
             this.elements.error.classList.remove('show');
         }
     }
 
+    /**
+     * Show alert message
+     * @param {string} message - Alert message
+     */
     showAlert(message) {
         if (!this.elements.alert || !this.elements.alertText) return;
 
@@ -294,12 +369,18 @@ class Application {
         logger.debug('Alert displayed in UI');
     }
 
+    /**
+     * Hide alert message
+     */
     hideAlert() {
         if (this.elements.alert) {
             this.elements.alert.classList.remove('show');
         }
     }
 
+    /**
+     * Cleanup on application close
+     */
     cleanup() {
         logger.info('Cleaning up application...');
 

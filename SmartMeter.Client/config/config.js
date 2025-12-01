@@ -1,3 +1,8 @@
+/**
+ * Configuration file for Smart Meter Client
+ * Centralized settings for server connection, authentication, and meter behavior
+ */
+
 export const CONFIG = {
     SERVER: {
         URL: 'ws://127.0.0.1:8080',

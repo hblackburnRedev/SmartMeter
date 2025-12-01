@@ -1,3 +1,8 @@
+/**
+ * WebSocket Service for Smart Meter Client
+ * Handles server communication with query parameter authentication
+ */
+
 import { createLogger } from '../utils/logger.js';
 import { CONFIG } from '../../config/config.js';
 import { storageService } from './storage.service.js';
@@ -5,6 +10,10 @@ import { sleep } from '../utils/helpers.js';
 
 const logger = createLogger('WebSocketService');
 
+/**
+ * WebSocket Service Class
+ * Manages WebSocket connection and communication with server
+ */
 class WebSocketService {
     constructor() {
         this.ws = null;
@@ -18,12 +27,21 @@ class WebSocketService {
         logger.info('WebSocket service initialized');
     }
 
+    /**
+     * Set client registration details (for new clients)
+     * @param {string} name - Client name
+     * @param {string} address - Client address
+     */
     setClientDetails(name, address) {
         this.clientName = name;
         this.clientAddress = address;
         logger.info(`Client details set: ${name}, ${address}`);
     }
 
+    /**
+     * Connect to WebSocket server with authentication via query parameters
+     * @returns {Promise<void>}
+     */
     async connect() {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             logger.warn('Already connected to server');
@@ -72,6 +90,10 @@ class WebSocketService {
         }
     }
 
+    /**
+     * Wait for WebSocket connection to open
+     * @returns {Promise<void>}
+     */
     waitForConnection() {
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
@@ -96,6 +118,9 @@ class WebSocketService {
         });
     }
 
+    /**
+     * Set up WebSocket event handlers
+     */
     setupEventHandlers() {
         this.ws.onmessage = (event) => {
             this.handleMessage(event);
@@ -111,6 +136,10 @@ class WebSocketService {
         };
     }
 
+    /**
+     * Send registration message to server for new clients
+     * @returns {Promise<void>}
+     */
     async sendRegistration() {
         if (!this.clientName || !this.clientAddress) {
             logger.error('Cannot register - client details not set');
@@ -132,6 +161,10 @@ class WebSocketService {
         }
     }
 
+    /**
+     * Handle incoming WebSocket messages
+     * @param {MessageEvent} event - WebSocket message event
+     */
     handleMessage(event) {
         try {
             logger.debug('Message received', event.data);
@@ -154,12 +187,20 @@ class WebSocketService {
         }
     }
 
+    /**
+     * Handle registration confirmation from server
+     * @param {Object} data - Registration response data
+     */
     handleRegistrationResponse(data) {
         logger.info(`Registration confirmed: ${data.clientName}`);
         this.isRegistered = true;
         storageService.clearError();
     }
 
+    /**
+     * Handle bill update from server
+     * @param {Object} data - Bill response data with total
+     */
     handleBillUpdate(data) {
         const billAmount = data.total;
 
@@ -172,6 +213,10 @@ class WebSocketService {
         }
     }
 
+    /**
+     * Handle grid alert broadcast from server
+     * @param {Object} data - Grid status data
+     */
     handleGridAlert(data) {
         const status = data.status.toLowerCase();
         const message = status === 'down'
@@ -182,6 +227,10 @@ class WebSocketService {
         storageService.setAlert(message);
     }
 
+    /**
+     * Handle WebSocket connection close
+     * @param {CloseEvent} event - Close event
+     */
     handleClose(event) {
         logger.info(`WebSocket closed: Code=${event.code}, Reason=${event.reason || 'None'}`);
 
@@ -205,6 +254,10 @@ class WebSocketService {
         this.handleReconnection();
     }
 
+    /**
+     * Handle reconnection logic with exponential backoff
+     * @returns {Promise<void>}
+     */
     async handleReconnection() {
         if (!this.shouldReconnect) {
             logger.info('Reconnection disabled');
@@ -233,6 +286,11 @@ class WebSocketService {
         }
     }
 
+    /**
+     * Send a meter reading to the server
+     * @param {number} reading - Current meter reading in kWh
+     * @returns {Promise<void>}
+     */
     async sendReading(reading) {
         if (!this.isConnected()) {
             logger.warn('Cannot send reading - not connected');
@@ -262,6 +320,11 @@ class WebSocketService {
         }
     }
 
+    /**
+     * Send a message via WebSocket
+     * @param {Object} message - Message object to send
+     * @returns {Promise<void>}
+     */
     send(message) {
         return new Promise((resolve, reject) => {
             if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
@@ -281,10 +344,17 @@ class WebSocketService {
         });
     }
 
+    /**
+     * Check if connected to server
+     * @returns {boolean} Connection status
+     */
     isConnected() {
         return this.ws && this.ws.readyState === WebSocket.OPEN && storageService.isConnected();
     }
 
+    /**
+     * Disconnect from server
+     */
     disconnect() {
         logger.info('Disconnecting from server');
 
@@ -302,6 +372,10 @@ class WebSocketService {
         logger.info('Disconnected');
     }
 
+    /**
+     * Get connection state
+     * @returns {string} Connection state (CONNECTING, OPEN, CLOSING, CLOSED)
+     */
     getConnectionState() {
         if (!this.ws) return 'CLOSED';
 
