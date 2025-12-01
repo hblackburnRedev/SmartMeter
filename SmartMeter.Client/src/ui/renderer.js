@@ -1,25 +1,21 @@
-﻿/**
- * Renderer - UI Controller for Smart Meter Client
- * Coordinates services and updates the DOM
- */
-
-import { CONFIG, generateMeterId, getRandomRegion, validateConfig } from '../../config/config.js';
+﻿import { CONFIG, generateMeterId, generateClientName, generateClientAddress, getRandomRegion, validateConfig } from '../../config/config.js';
 import { createLogger } from '../utils/logger.js';
-import { formatCurrency, formatReading } from '../utils/helpers.js';
+import { formatCurrency } from '../utils/helpers.js';
 import { storageService } from '../services/storage.service.js';
 import { meterService } from '../services/meter.service.js';
 import { websocketService } from '../services/websocket.service.js';
 
 const logger = createLogger('Renderer');
 
-/**
- * Application class - main controller
- */
 class Application {
     constructor() {
         this.meterId = null;
         this.region = null;
+        this.clientName = null;
+        this.clientAddress = null;
         this.initialized = false;
+        this.sessionStartTime = null;
+        this.sessionTimer = null;
 
         this.elements = {
             status: null,
@@ -29,13 +25,15 @@ class Application {
             errorText: null,
             alert: null,
             alertText: null,
-            meterId: null
+            meterId: null,
+            region: null,
+            clientName: null,
+            readingsSent: null,
+            sessionTime: null,
+            lastUpdate: null
         };
     }
 
-    /**
-     * Initialize the application
-     */
     async init() {
         try {
             logger.info('Initializing Smart Meter Client');
@@ -43,13 +41,20 @@ class Application {
             validateConfig();
 
             this.meterId = generateMeterId();
+            this.region = getRandomRegion();
+            this.clientName = generateClientName();
+            this.clientAddress = generateClientAddress(this.region);
 
             logger.info(`Meter ID: ${this.meterId}`);
             logger.info(`Region: ${this.region}`);
+            logger.info(`Name: ${this.clientName}`);
+            logger.info(`Address: ${this.clientAddress}`);
 
             this.initializeDOMElements();
 
             storageService.initialize(this.meterId, this.region);
+
+            websocketService.setClientDetails(this.clientName, this.clientAddress);
 
             this.subscribeToEvents();
 
@@ -58,6 +63,8 @@ class Application {
             await this.connectToServer();
 
             this.startMeterService();
+
+            this.startSessionTimer();
 
             this.initialized = true;
             logger.info('Application initialized successfully');
@@ -68,9 +75,6 @@ class Application {
         }
     }
 
-    /**
-     * Initialize DOM element references
-     */
     initializeDOMElements() {
         this.elements = {
             status: document.getElementById('status'),
@@ -81,7 +85,11 @@ class Application {
             alert: document.getElementById('alert'),
             alertText: document.getElementById('alert-text'),
             meterId: document.getElementById('meter-id'),
-            gaugeProgress: document.getElementById('gauge-progress')
+            region: document.getElementById('region'),
+            clientName: document.getElementById('client-name'),
+            readingsSent: document.getElementById('readings-sent'),
+            sessionTime: document.getElementById('session-time'),
+            lastUpdate: document.getElementById('last-update')
         };
 
         for (const [key, element] of Object.entries(this.elements)) {
@@ -90,18 +98,14 @@ class Application {
             }
         }
 
-        this.gaugeCircumference = 2 * Math.PI * 85;
-        this.maxReading = 10;
-
         logger.debug('DOM elements initialized');
     }
 
-    /**
-     * Subscribe to storage service events
-     */
     subscribeToEvents() {
         storageService.subscribe('reading', (reading) => {
             this.updateReading(reading);
+            this.updateStats();
+            this.updateLastUpdate();
         });
 
         storageService.subscribe('bill', (bill) => {
@@ -123,9 +127,6 @@ class Application {
         logger.debug('Event subscriptions established');
     }
 
-    /**
-     * Connect to WebSocket server
-     */
     async connectToServer() {
         try {
             logger.info('Connecting to server...');
@@ -138,9 +139,6 @@ class Application {
         }
     }
 
-    /**
-     * Start the meter service
-     */
     startMeterService() {
         logger.info('Starting meter service...');
 
@@ -155,36 +153,46 @@ class Application {
         logger.info('Meter service started');
     }
 
-    /**
-     * Update the entire UI
-     */
+    startSessionTimer() {
+        this.sessionStartTime = Date.now();
+
+        this.sessionTimer = setInterval(() => {
+            this.updateSessionTime();
+        }, 1000);
+    }
+
     updateUI() {
         const state = storageService.getState();
 
         this.updateMeterId(state.meterId);
+        this.updateRegion(this.region);
+        this.updateClientName(this.clientName);
         this.updateReading(state.currentReading);
         this.updateBill(state.currentBill);
         this.updateConnectionStatus(state.isConnected);
+        this.updateStats();
     }
 
-    /**
-     * Update meter ID display
-     * @param {string} meterId - Meter ID
-     */
     updateMeterId(meterId) {
         if (this.elements.meterId) {
             this.elements.meterId.textContent = meterId || 'Initializing...';
         }
     }
 
+    updateRegion(region) {
+        if (this.elements.region) {
+            this.elements.region.textContent = region || '-';
+        }
+    }
 
-    /**
-     * Update reading display and animate gauge
-     * @param {number} reading - Current reading in kWh
-     */
+    updateClientName(name) {
+        if (this.elements.clientName) {
+            this.elements.clientName.textContent = name || '-';
+        }
+    }
+
     updateReading(reading) {
         if (this.elements.reading) {
-
             this.elements.reading.textContent = reading.toFixed(3);
 
             this.elements.reading.classList.add('updating');
@@ -192,32 +200,10 @@ class Application {
                 this.elements.reading.classList.remove('updating');
             }, 300);
 
-            this.updateGauge(reading);
-
             logger.debug(`UI updated: Reading = ${reading} kWh`);
         }
     }
 
-    /**
-     * Update the circular gauge animation
-     * @param {number} reading - Current reading in kWh
-     */
-    updateGauge(reading) {
-        if (!this.elements.gaugeProgress) return;
-
-        const percentage = Math.min((reading / this.maxReading) * 100, 100);
-
-        const offset = this.gaugeCircumference - (percentage / 100) * this.gaugeCircumference;
-
-        this.elements.gaugeProgress.style.strokeDashoffset = offset;
-
-        logger.debug(`Gauge updated: ${percentage.toFixed(1)}%`);
-    }
-
-    /**
-     * Update bill display
-     * @param {number} bill - Current bill amount
-     */
     updateBill(bill) {
         if (this.elements.bill) {
             this.elements.bill.textContent = formatCurrency(bill);
@@ -226,15 +212,41 @@ class Application {
             setTimeout(() => {
                 this.elements.bill.classList.remove('updating');
             }, 300);
-            
+
             logger.debug(`UI updated: Bill = £${bill.toFixed(2)}`);
         }
     }
-    
-    /**
-     * Update connection status display
-     * @param {boolean} isConnected - Connection status
-     */
+
+    updateStats() {
+        const stats = storageService.getStatistics();
+
+        if (this.elements.readingsSent) {
+            this.elements.readingsSent.textContent = stats.totalReadingsSent;
+        }
+    }
+
+    updateSessionTime() {
+        if (!this.sessionStartTime || !this.elements.sessionTime) return;
+
+        const elapsed = Math.floor((Date.now() - this.sessionStartTime) / 1000);
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = elapsed % 60;
+
+        this.elements.sessionTime.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    updateLastUpdate() {
+        if (this.elements.lastUpdate) {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('en-GB', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            this.elements.lastUpdate.textContent = timeString;
+        }
+    }
+
     updateConnectionStatus(isConnected) {
         if (!this.elements.status) return;
 
@@ -254,10 +266,6 @@ class Application {
         }
     }
 
-    /**
-     * Show error message
-     * @param {string} message - Error message
-     */
     showError(message) {
         if (!this.elements.error || !this.elements.errorText) return;
 
@@ -267,19 +275,12 @@ class Application {
         logger.debug('Error displayed in UI');
     }
 
-    /**
-     * Hide error message
-     */
     hideError() {
         if (this.elements.error) {
             this.elements.error.classList.remove('show');
         }
     }
 
-    /**
-     * Show alert message
-     * @param {string} message - Alert message
-     */
     showAlert(message) {
         if (!this.elements.alert || !this.elements.alertText) return;
 
@@ -293,20 +294,18 @@ class Application {
         logger.debug('Alert displayed in UI');
     }
 
-    /**
-     * Hide alert message
-     */
     hideAlert() {
         if (this.elements.alert) {
             this.elements.alert.classList.remove('show');
         }
     }
 
-    /**
-     * Cleanup on application close
-     */
     cleanup() {
         logger.info('Cleaning up application...');
+
+        if (this.sessionTimer) {
+            clearInterval(this.sessionTimer);
+        }
 
         meterService.stop();
 

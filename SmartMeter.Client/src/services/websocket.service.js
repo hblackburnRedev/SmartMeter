@@ -1,33 +1,29 @@
-/**
- * WebSocket Service for Smart Meter Client
- * Handles server communication with query parameter authentication
- */
-
 import { createLogger } from '../utils/logger.js';
 import { CONFIG } from '../../config/config.js';
 import { storageService } from './storage.service.js';
-import { parseDecimal, sleep } from '../utils/helpers.js';
+import { sleep } from '../utils/helpers.js';
 
 const logger = createLogger('WebSocketService');
 
-/**
- * WebSocket Service Class
- * Manages WebSocket connection and communication with server
- */
 class WebSocketService {
     constructor() {
         this.ws = null;
         this.isConnecting = false;
         this.shouldReconnect = true;
         this.reconnectAttempt = 0;
+        this.isRegistered = false;
+        this.clientName = null;
+        this.clientAddress = null;
 
         logger.info('WebSocket service initialized');
     }
 
-    /**
-     * Connect to WebSocket server with authentication via query parameters
-     * @returns {Promise<void>}
-     */
+    setClientDetails(name, address) {
+        this.clientName = name;
+        this.clientAddress = address;
+        logger.info(`Client details set: ${name}, ${address}`);
+    }
+
     async connect() {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             logger.warn('Already connected to server');
@@ -49,20 +45,21 @@ class WebSocketService {
         storageService.setConnectionStatus(false);
 
         try {
-            // Browser WebSocket doesn't support custom headers, so we use query params
             const url = new URL(CONFIG.SERVER.URL);
             url.searchParams.append('clientId', meterId);
             url.searchParams.append('apiKey', CONFIG.AUTH.API_KEY);
 
             logger.info(`Connecting to ${CONFIG.SERVER.URL}`);
-            logger.debug(`Using ClientId: ${meterId}`);
-            logger.debug(`Full URL: ${url.toString()}`);
 
             this.ws = new WebSocket(url.toString());
 
             this.setupEventHandlers();
 
             await this.waitForConnection();
+
+            if (!this.isRegistered) {
+                await this.sendRegistration();
+            }
 
         } catch (error) {
             logger.error('Connection failed', error);
@@ -75,10 +72,6 @@ class WebSocketService {
         }
     }
 
-    /**
-     * Wait for WebSocket connection to open
-     * @returns {Promise<void>}
-     */
     waitForConnection() {
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
@@ -103,9 +96,6 @@ class WebSocketService {
         });
     }
 
-    /**
-     * Set up WebSocket event handlers
-     */
     setupEventHandlers() {
         this.ws.onmessage = (event) => {
             this.handleMessage(event);
@@ -121,22 +111,41 @@ class WebSocketService {
         };
     }
 
-    /**
-     * Handle incoming WebSocket messages
-     * @param {MessageEvent} event - WebSocket message event
-     */
+    async sendRegistration() {
+        if (!this.clientName || !this.clientAddress) {
+            logger.error('Cannot register - client details not set');
+            throw new Error('Client details not initialized');
+        }
+
+        try {
+            const message = {
+                name: this.clientName,
+                address: this.clientAddress
+            };
+
+            logger.info(`Sending registration: ${this.clientName}`);
+            await this.send(message);
+
+        } catch (error) {
+            logger.error('Failed to send registration', error);
+            throw error;
+        }
+    }
+
     handleMessage(event) {
         try {
             logger.debug('Message received', event.data);
 
-            const billAmount = parseDecimal(event.data, 0);
+            const data = JSON.parse(event.data);
 
-            if (billAmount > 0) {
-                logger.info(`Bill update received: £${billAmount.toFixed(2)}`);
-                storageService.updateBill(billAmount);
-                storageService.clearError();
+            if (data.status) {
+                this.handleGridAlert(data);
+            } else if (data.clientId && data.name) {
+                this.handleRegistrationResponse(data);
+            } else if (data.total !== undefined) {
+                this.handleBillUpdate(data);
             } else {
-                logger.warn('Received invalid bill amount', event.data);
+                logger.warn('Unknown message format', data);
             }
 
         } catch (error) {
@@ -145,14 +154,39 @@ class WebSocketService {
         }
     }
 
-    /**
-     * Handle WebSocket connection close
-     * @param {CloseEvent} event - Close event
-     */
+    handleRegistrationResponse(data) {
+        logger.info(`Registration confirmed: ${data.clientName}`);
+        this.isRegistered = true;
+        storageService.clearError();
+    }
+
+    handleBillUpdate(data) {
+        const billAmount = data.total;
+
+        if (typeof billAmount === 'number' && billAmount >= 0) {
+            logger.info(`Bill update received: £${billAmount.toFixed(2)}`);
+            storageService.updateBill(billAmount);
+            storageService.clearError();
+        } else {
+            logger.warn('Received invalid bill amount', data);
+        }
+    }
+
+    handleGridAlert(data) {
+        const status = data.status.toLowerCase();
+        const message = status === 'down'
+            ? '⚠️ Grid Alert: Electricity supply disrupted'
+            : '✓ Grid Restored: Electricity supply normal';
+
+        logger.warn(`Grid status: ${status}`);
+        storageService.setAlert(message);
+    }
+
     handleClose(event) {
         logger.info(`WebSocket closed: Code=${event.code}, Reason=${event.reason || 'None'}`);
 
         storageService.setConnectionStatus(false);
+        this.isRegistered = false;
 
         if (event.code === 1000) {
             logger.info('Normal closure - not reconnecting');
@@ -171,9 +205,6 @@ class WebSocketService {
         this.handleReconnection();
     }
 
-    /**
-     * Handle reconnection logic
-     */
     async handleReconnection() {
         if (!this.shouldReconnect) {
             logger.info('Reconnection disabled');
@@ -202,11 +233,6 @@ class WebSocketService {
         }
     }
 
-    /**
-     * Send a meter reading to the server
-     * @param {number} reading - Current meter reading in kWh
-     * @returns {Promise<void>}
-     */
     async sendReading(reading) {
         if (!this.isConnected()) {
             logger.warn('Cannot send reading - not connected');
@@ -214,13 +240,19 @@ class WebSocketService {
             return;
         }
 
+        if (!this.isRegistered) {
+            logger.warn('Cannot send reading - not registered');
+            storageService.setError('Cannot send reading - registration pending');
+            return;
+        }
+
         try {
             const message = {
-                Region: storageService.getRegion(),
-                Usage: reading
+                region: storageService.getRegion(),
+                usage: reading
             };
 
-            logger.info(`Sending reading: ${reading} kWh for region ${message.Region}`);
+            logger.info(`Sending reading: ${reading} kWh for region ${message.region}`);
             await this.send(message);
 
         } catch (error) {
@@ -230,11 +262,6 @@ class WebSocketService {
         }
     }
 
-    /**
-     * Send a message via WebSocket
-     * @param {Object} message - Message object to send
-     * @returns {Promise<void>}
-     */
     send(message) {
         return new Promise((resolve, reject) => {
             if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
@@ -254,17 +281,10 @@ class WebSocketService {
         });
     }
 
-    /**
-     * Check if connected to server
-     * @returns {boolean} Connection status
-     */
     isConnected() {
         return this.ws && this.ws.readyState === WebSocket.OPEN && storageService.isConnected();
     }
 
-    /**
-     * Disconnect from server
-     */
     disconnect() {
         logger.info('Disconnecting from server');
 
@@ -278,13 +298,10 @@ class WebSocketService {
         }
 
         storageService.setConnectionStatus(false);
+        this.isRegistered = false;
         logger.info('Disconnected');
     }
 
-    /**
-     * Get connection state
-     * @returns {string} Connection state (CONNECTING, OPEN, CLOSING, CLOSED)
-     */
     getConnectionState() {
         if (!this.ws) return 'CLOSED';
 
