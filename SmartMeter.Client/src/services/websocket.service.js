@@ -85,7 +85,7 @@ class WebSocketService {
             storageService.incrementConnectionAttempts();
             storageService.setError(`Connection failed: ${error.message}`);
 
-            this.handleReconnection();
+            await this.handleReconnection();
             throw error;
         }
     }
@@ -258,8 +258,10 @@ class WebSocketService {
             return;
         }
 
-        storageService.setError('Connection lost. Reconnecting...');
-        this.handleReconnection();
+        if (!this.isConnecting && this.shouldReconnect) {
+            storageService.setError('Connection lost. Reconnecting...');
+            this.handleReconnection();
+        }
     }
 
     /**

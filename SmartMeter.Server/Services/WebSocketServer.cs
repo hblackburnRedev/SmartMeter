@@ -94,7 +94,7 @@ public class WebSocketServer(
     private async Task ProcessWebSocketRequest(
         HttpListenerContext context,
         string clientId,
-        CancellationToken ct =  default)
+        CancellationToken ct = default)
     {
         var clientAddress = context.Request.RemoteEndPoint.Address.ToString();
         logger.LogInformation("Incoming WebSocket connection from {ClientAddress}", clientAddress);
@@ -111,7 +111,7 @@ public class WebSocketServer(
             logger.LogDebug("WebSocket accepted for {ClientAddress}", clientAddress);
 
             var sessionKey = Guid.NewGuid().ToString();
-            _sockets[sessionKey] =  socket;
+            _sockets[sessionKey] = socket;
 
             logger.LogInformation(
                 "Client {ClientID} authenticated successfully from {ClientAddress} with session {SessionKey}",
@@ -121,10 +121,12 @@ public class WebSocketServer(
 
             var client = await clientService.GetSmartMeterClientAsync(Guid.Parse(clientId));
             
+            var isNewClient = client is null;
+            
+            var registrationConfirmed = false;
+
             while (socket.State == WebSocketState.Open)
             {
-                var newClient = client is null;
-
                 var message = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
 
                 if (message.MessageType == WebSocketMessageType.Text)
@@ -134,45 +136,47 @@ public class WebSocketServer(
 
                     string response;
                     
-                    if (newClient)
+                    if (JsonDeserializerHelper.TryDeserialize(messageAsString, _jsonOptions, out NewClientRequest? newClientRequest) &&
+                        newClientRequest is not null)
                     {
-                        if (!JsonDeserializerHelper.TryDeserialize(messageAsString, _jsonOptions, out NewClientRequest? newClientRequest) ||
-                            newClientRequest is null)
+                        if (isNewClient)
                         {
-                            logger.LogWarning("Invalid message format from {ClientAddress}", clientAddress);
-                            closeStatus = WebSocketCloseStatus.InvalidPayloadData;
-                            closeDescription = "Invalid message format";
-                            break;
-                        }
-                        
-                        client = await clientService.AddSmartMeterClientAsync(
-                            Guid.Parse(clientId),
-                            newClientRequest.ClientName,
-                            newClientRequest.Address);
+                            client = await clientService.AddSmartMeterClientAsync(
+                                Guid.Parse(clientId),
+                                newClientRequest.ClientName,
+                                newClientRequest.Address);
 
-                        response =
-                            JsonSerializer.Serialize(client,
-                                _jsonOptions);
+                            logger.LogInformation("New client {ClientID} registered successfully", clientId);
+                        }
+                        else
+                        {
+                            logger.LogInformation("Existing client {ClientID} reconnected, confirming registration", clientId);
+                        }
+
+                        response = JsonSerializer.Serialize(client, _jsonOptions);
+                        registrationConfirmed = true;
+                        isNewClient = false;
                     }
-                    else
+                    else if (JsonDeserializerHelper.TryDeserialize(messageAsString, _jsonOptions, out ReadingRequest? readingRequest) &&
+                        readingRequest is not null)
                     {
-                        if (!JsonDeserializerHelper.TryDeserialize(messageAsString, _jsonOptions, out ReadingRequest? readingRequest) ||
-                            readingRequest is null)
-                        {
-                            logger.LogWarning("Invalid message format from {ClientAddress}", clientAddress);
-                            closeStatus = WebSocketCloseStatus.InvalidPayloadData;
-                            closeDescription = "Invalid message format";
-                            break;
-                        }
-
                         var pricing = await pricingService.CalculatePriceAsync(readingRequest.Region, readingRequest.Usage, clientId);
 
                         response = JsonSerializer.Serialize(new ReadingResponse 
                         {   
-                            Region =  readingRequest.Region,
+                            Region = readingRequest.Region,
                             Usage = readingRequest.Usage,
                             Price = pricing,
                         });
+                        
+                        logger.LogDebug("Processed reading for client {ClientID}: {Usage} kWh", clientId, readingRequest.Usage);
+                    }
+                    else
+                    {
+                        logger.LogWarning("Invalid message format from {ClientAddress}", clientAddress);
+                        closeStatus = WebSocketCloseStatus.InvalidPayloadData;
+                        closeDescription = "Invalid message format";
+                        break;
                     }
                     
                     await socket.SendAsync(
